@@ -15,7 +15,7 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const versionOnly = searchParams.get('versionOnly') === '1';
 
-    const pad = getPad(slug);
+    const pad = await getPad(slug);
     if (!pad) {
       return NextResponse.json({
         exists: false,
@@ -69,7 +69,7 @@ export async function POST(
       return NextResponse.json({ error: 'Missing authorization proof' }, { status: 400 });
     }
 
-    const result = savePad({
+    const result = await savePad({
       slug,
       encryptedContent,
       authProof,
@@ -121,7 +121,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Missing deletion authorization proof' }, { status: 400 });
     }
 
-    const deleted = deletePad(slug, authProof);
+    const deleted = await deletePad(slug, authProof);
     if (!deleted) {
       return NextResponse.json({ error: 'Pad not found' }, { status: 404 });
     }

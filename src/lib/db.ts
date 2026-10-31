@@ -1,5 +1,4 @@
-// @ts-ignore
-import { DatabaseSync } from 'node:sqlite';
+import { createClient, Client } from '@libsql/client';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,89 +20,118 @@ export function hashProof(proof: string): string {
   return crypto.createHash('sha256').update(proof).digest('hex');
 }
 
-const globalForDb = global as unknown as { dbInstance?: DatabaseSync };
+const globalForDb = global as unknown as { dbClient?: Client; initPromise?: Promise<void> };
 
-function getDatabase(): DatabaseSync {
-  if (globalForDb.dbInstance) {
-    return globalForDb.dbInstance;
+function getClient(): Client {
+  if (globalForDb.dbClient) {
+    return globalForDb.dbClient;
   }
 
-  const dataDir = path.join(process.cwd(), 'data');
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
+  const url = process.env.TURSO_DATABASE_URL || 'file:data/codedpad.db';
+  const authToken = process.env.TURSO_AUTH_TOKEN;
 
-  const dbPath = path.join(dataDir, 'codedpad.db');
-  const db = new DatabaseSync(dbPath);
-
-  // Initialize schema
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS pads (
-      slug TEXT PRIMARY KEY,
-      encrypted_content TEXT NOT NULL,
-      auth_hash TEXT NOT NULL DEFAULT '',
-      content_hash TEXT NOT NULL DEFAULT '',
-      version INTEGER NOT NULL DEFAULT 1,
-      expires_at INTEGER,
-      burn_after_read INTEGER NOT NULL DEFAULT 0,
-      view_count INTEGER NOT NULL DEFAULT 0,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_pads_expires_at ON pads (expires_at);
-  `);
-
-  // Migrate columns if needed
-  try {
-    const tableInfo = db.prepare("PRAGMA table_info('pads')").all() as any[];
-    const hasAuthHash = tableInfo.some((col: any) => col.name === 'auth_hash');
-    if (!hasAuthHash) {
-      db.exec("ALTER TABLE pads ADD COLUMN auth_hash TEXT NOT NULL DEFAULT ''");
+  // If local file path, ensure directory exists
+  if (url.startsWith('file:') && typeof process !== 'undefined') {
+    const dataDir = path.join(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) {
+      try {
+        fs.mkdirSync(dataDir, { recursive: true });
+      } catch {
+        // ignore
+      }
     }
-  } catch (err) {
-    console.error('Migration notice:', err);
   }
 
-  if (process.env.NODE_ENV !== 'production') {
-    globalForDb.dbInstance = db;
-  }
+  const client = createClient({
+    url,
+    authToken,
+  });
 
-  return db;
+  globalForDb.dbClient = client;
+  return client;
 }
 
-export function getPad(slug: string): PadRecord | null {
-  const db = getDatabase();
-  const selectStmt = db.prepare('SELECT * FROM pads WHERE slug = ?');
-  const row = selectStmt.get(slug) as unknown as PadRecord | undefined;
+let isInitialized = false;
+async function ensureSchema(client: Client): Promise<void> {
+  if (isInitialized) return;
+  if (globalForDb.initPromise) {
+    return globalForDb.initPromise;
+  }
 
-  if (!row) {
+  globalForDb.initPromise = (async () => {
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS pads (
+        slug TEXT PRIMARY KEY,
+        encrypted_content TEXT NOT NULL,
+        auth_hash TEXT NOT NULL DEFAULT '',
+        content_hash TEXT NOT NULL DEFAULT '',
+        version INTEGER NOT NULL DEFAULT 1,
+        expires_at INTEGER,
+        burn_after_read INTEGER NOT NULL DEFAULT 0,
+        view_count INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `);
+
+    try {
+      await client.execute(`
+        CREATE INDEX IF NOT EXISTS idx_pads_expires_at ON pads (expires_at)
+      `);
+    } catch {
+      // index might exist
+    }
+
+    isInitialized = true;
+  })();
+
+  return globalForDb.initPromise;
+}
+
+export async function getPad(slug: string): Promise<PadRecord | null> {
+  const client = getClient();
+  await ensureSchema(client);
+
+  const res = await client.execute({
+    sql: 'SELECT * FROM pads WHERE slug = ?',
+    args: [slug],
+  });
+
+  if (!res.rows.length) {
     return null;
   }
 
+  const row = res.rows[0] as unknown as PadRecord;
   const now = Date.now();
 
   // Expired check
   if (row.expires_at !== null && row.expires_at > 0 && row.expires_at < now) {
-    const deleteStmt = db.prepare('DELETE FROM pads WHERE slug = ?');
-    deleteStmt.run(slug);
+    await client.execute({
+      sql: 'DELETE FROM pads WHERE slug = ?',
+      args: [slug],
+    });
     return null;
   }
 
-  // Burn after read check: if already viewed once, it is expired/burned
-  if (row.burn_after_read === 1 && row.view_count >= 1) {
-    const deleteStmt = db.prepare('DELETE FROM pads WHERE slug = ?');
-    deleteStmt.run(slug);
+  // Burn after read check: if already viewed once, it is burned
+  if (Number(row.burn_after_read) === 1 && Number(row.view_count) >= 1) {
+    await client.execute({
+      sql: 'DELETE FROM pads WHERE slug = ?',
+      args: [slug],
+    });
     return null;
   }
 
   // Increment view count
-  const updateViewStmt = db.prepare('UPDATE pads SET view_count = view_count + 1 WHERE slug = ?');
-  updateViewStmt.run(slug);
+  await client.execute({
+    sql: 'UPDATE pads SET view_count = view_count + 1 WHERE slug = ?',
+    args: [slug],
+  });
 
   return row;
 }
 
-export function savePad({
+export async function savePad({
   slug,
   encryptedContent,
   authProof,
@@ -117,11 +145,16 @@ export function savePad({
   expectedVersion?: number;
   expiresAt?: number | null;
   burnAfterRead?: boolean;
-}): { success: boolean; version: number } {
-  const db = getDatabase();
-  const selectStmt = db.prepare('SELECT * FROM pads WHERE slug = ?');
-  const existing = selectStmt.get(slug) as unknown as PadRecord | undefined;
+}): Promise<{ success: boolean; version: number }> {
+  const client = getClient();
+  await ensureSchema(client);
 
+  const res = await client.execute({
+    sql: 'SELECT * FROM pads WHERE slug = ?',
+    args: [slug],
+  });
+
+  const existing = (res.rows[0] as unknown as PadRecord) || undefined;
   const now = Date.now();
   const burnFlag = burnAfterRead ? 1 : 0;
   const expiry = expiresAt && expiresAt > 0 ? expiresAt : null;
@@ -134,72 +167,81 @@ export function savePad({
     }
 
     // 2. Optimistic Concurrency Control Check
-    if (expectedVersion !== undefined && expectedVersion > 0 && existing.version !== expectedVersion) {
-      throw new Error(`CONCURRENCY_CONFLICT: Pad was updated by another session. Stored version is ${existing.version}, but you are saving against version ${expectedVersion}.`);
+    if (expectedVersion !== undefined && expectedVersion > 0 && Number(existing.version) !== expectedVersion) {
+      throw new Error(
+        `CONCURRENCY_CONFLICT: Pad was updated by another session. Stored version is ${existing.version}, but you are saving against version ${expectedVersion}.`
+      );
     }
 
-    const nextVersion = existing.version + 1;
-    const updateStmt = db.prepare(`
-      UPDATE pads SET 
-        encrypted_content = ?, 
-        auth_hash = ?,
-        content_hash = ?,
-        version = ?, 
-        expires_at = ?, 
-        burn_after_read = ?, 
-        updated_at = ?
-      WHERE slug = ?
-    `);
-
-    updateStmt.run(
-      encryptedContent,
-      serverAuthHash,
-      serverAuthHash,
-      nextVersion,
-      expiry,
-      burnFlag,
-      now,
-      slug
-    );
+    const nextVersion = Number(existing.version) + 1;
+    await client.execute({
+      sql: `
+        UPDATE pads SET 
+          encrypted_content = ?, 
+          auth_hash = ?,
+          content_hash = ?,
+          version = ?, 
+          expires_at = ?, 
+          burn_after_read = ?, 
+          updated_at = ?
+        WHERE slug = ?
+      `,
+      args: [
+        encryptedContent,
+        serverAuthHash,
+        serverAuthHash,
+        nextVersion,
+        expiry,
+        burnFlag,
+        now,
+        slug,
+      ],
+    });
 
     return { success: true, version: nextVersion };
   } else {
     // New pad creation
-    const insertStmt = db.prepare(`
-      INSERT INTO pads (
-        slug, 
-        encrypted_content, 
-        auth_hash, 
-        content_hash,
-        version, 
-        expires_at, 
-        burn_after_read, 
-        view_count, 
-        created_at, 
-        updated_at
-      ) VALUES (?, ?, ?, ?, 1, ?, ?, 0, ?, ?)
-    `);
-
-    insertStmt.run(
-      slug,
-      encryptedContent,
-      serverAuthHash,
-      serverAuthHash,
-      expiry,
-      burnFlag,
-      now,
-      now
-    );
+    await client.execute({
+      sql: `
+        INSERT INTO pads (
+          slug, 
+          encrypted_content, 
+          auth_hash, 
+          content_hash,
+          version, 
+          expires_at, 
+          burn_after_read, 
+          view_count, 
+          created_at, 
+          updated_at
+        ) VALUES (?, ?, ?, ?, 1, ?, ?, 0, ?, ?)
+      `,
+      args: [
+        slug,
+        encryptedContent,
+        serverAuthHash,
+        serverAuthHash,
+        expiry,
+        burnFlag,
+        now,
+        now,
+      ],
+    });
 
     return { success: true, version: 1 };
   }
 }
 
-export function deletePad(slug: string, authProof: string): boolean {
-  const db = getDatabase();
-  const selectStmt = db.prepare('SELECT * FROM pads WHERE slug = ?');
-  const existing = selectStmt.get(slug) as unknown as PadRecord | undefined;
+export async function deletePad(slug: string, authProof: string): Promise<boolean> {
+  const client = getClient();
+  await ensureSchema(client);
 
+  const res = await client.execute({
+    sql: 'SELECT * FROM pads WHERE slug = ?',
+    args: [slug],
+  });
+
+  const existing = (res.rows[0] as unknown as PadRecord) || undefined;
   if (!existing) {
     return false;
   }
@@ -209,7 +251,10 @@ export function deletePad(slug: string, authProof: string): boolean {
     throw new Error('AUTH_FAILED: Incorrect passphrase for pad deletion.');
   }
 
-  const deleteStmt = db.prepare('DELETE FROM pads WHERE slug = ?');
-  deleteStmt.run(slug);
+  await client.execute({
+    sql: 'DELETE FROM pads WHERE slug = ?',
+    args: [slug],
+  });
+
   return true;
 }
