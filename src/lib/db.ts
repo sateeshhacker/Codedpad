@@ -1,11 +1,13 @@
 // @ts-ignore
 import { DatabaseSync } from 'node:sqlite';
-import fs from 'fs';
-import path from 'path';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 
 export interface PadRecord {
   slug: string;
   encrypted_content: string;
+  auth_hash: string;
   content_hash: string;
   version: number;
   expires_at: number | null;
@@ -15,7 +17,10 @@ export interface PadRecord {
   updated_at: number;
 }
 
-// Global database instance caching for Next.js hot reload
+export function hashProof(proof: string): string {
+  return crypto.createHash('sha256').update(proof).digest('hex');
+}
+
 const globalForDb = global as unknown as { dbInstance?: DatabaseSync };
 
 function getDatabase(): DatabaseSync {
@@ -36,7 +41,8 @@ function getDatabase(): DatabaseSync {
     CREATE TABLE IF NOT EXISTS pads (
       slug TEXT PRIMARY KEY,
       encrypted_content TEXT NOT NULL,
-      content_hash TEXT NOT NULL,
+      auth_hash TEXT NOT NULL DEFAULT '',
+      content_hash TEXT NOT NULL DEFAULT '',
       version INTEGER NOT NULL DEFAULT 1,
       expires_at INTEGER,
       burn_after_read INTEGER NOT NULL DEFAULT 0,
@@ -46,6 +52,17 @@ function getDatabase(): DatabaseSync {
     );
     CREATE INDEX IF NOT EXISTS idx_pads_expires_at ON pads (expires_at);
   `);
+
+  // Migrate columns if needed
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info('pads')").all() as any[];
+    const hasAuthHash = tableInfo.some((col: any) => col.name === 'auth_hash');
+    if (!hasAuthHash) {
+      db.exec("ALTER TABLE pads ADD COLUMN auth_hash TEXT NOT NULL DEFAULT ''");
+    }
+  } catch (err) {
+    console.error('Migration notice:', err);
+  }
 
   if (process.env.NODE_ENV !== 'production') {
     globalForDb.dbInstance = db;
@@ -72,7 +89,7 @@ export function getPad(slug: string): PadRecord | null {
     return null;
   }
 
-  // Burn after read: if already viewed once, it is expired/burned
+  // Burn after read check: if already viewed once, it is expired/burned
   if (row.burn_after_read === 1 && row.view_count >= 1) {
     const deleteStmt = db.prepare('DELETE FROM pads WHERE slug = ?');
     deleteStmt.run(slug);
@@ -89,15 +106,15 @@ export function getPad(slug: string): PadRecord | null {
 export function savePad({
   slug,
   encryptedContent,
-  initHash,
-  currentHash,
+  authProof,
+  expectedVersion,
   expiresAt,
   burnAfterRead,
 }: {
   slug: string;
   encryptedContent: string;
-  initHash?: string;
-  currentHash: string;
+  authProof: string;
+  expectedVersion?: number;
   expiresAt?: number | null;
   burnAfterRead?: boolean;
 }): { success: boolean; version: number } {
@@ -108,18 +125,25 @@ export function savePad({
   const now = Date.now();
   const burnFlag = burnAfterRead ? 1 : 0;
   const expiry = expiresAt && expiresAt > 0 ? expiresAt : null;
+  const serverAuthHash = hashProof(authProof);
 
   if (existing) {
-    // Concurrency / write authorization check
-    if (initHash && existing.content_hash !== initHash) {
-      throw new Error('CONCURRENCY_CONFLICT: Pad has been modified by another session or incorrect proof.');
+    // 1. Zero-Knowledge Authorization Check
+    if (existing.auth_hash && existing.auth_hash !== serverAuthHash) {
+      throw new Error('AUTH_FAILED: Incorrect passphrase for this pad.');
+    }
+
+    // 2. Optimistic Concurrency Control Check
+    if (expectedVersion !== undefined && expectedVersion > 0 && existing.version !== expectedVersion) {
+      throw new Error(`CONCURRENCY_CONFLICT: Pad was updated by another session. Stored version is ${existing.version}, but you are saving against version ${expectedVersion}.`);
     }
 
     const nextVersion = existing.version + 1;
     const updateStmt = db.prepare(`
       UPDATE pads SET 
         encrypted_content = ?, 
-        content_hash = ?, 
+        auth_hash = ?,
+        content_hash = ?,
         version = ?, 
         expires_at = ?, 
         burn_after_read = ?, 
@@ -129,7 +153,8 @@ export function savePad({
 
     updateStmt.run(
       encryptedContent,
-      currentHash,
+      serverAuthHash,
+      serverAuthHash,
       nextVersion,
       expiry,
       burnFlag,
@@ -144,20 +169,22 @@ export function savePad({
       INSERT INTO pads (
         slug, 
         encrypted_content, 
-        content_hash, 
+        auth_hash, 
+        content_hash,
         version, 
         expires_at, 
         burn_after_read, 
         view_count, 
         created_at, 
         updated_at
-      ) VALUES (?, ?, ?, 1, ?, ?, 0, ?, ?)
+      ) VALUES (?, ?, ?, ?, 1, ?, ?, 0, ?, ?)
     `);
 
     insertStmt.run(
       slug,
       encryptedContent,
-      currentHash,
+      serverAuthHash,
+      serverAuthHash,
       expiry,
       burnFlag,
       now,
@@ -168,7 +195,7 @@ export function savePad({
   }
 }
 
-export function deletePad(slug: string, initHash: string): boolean {
+export function deletePad(slug: string, authProof: string): boolean {
   const db = getDatabase();
   const selectStmt = db.prepare('SELECT * FROM pads WHERE slug = ?');
   const existing = selectStmt.get(slug) as unknown as PadRecord | undefined;
@@ -177,8 +204,9 @@ export function deletePad(slug: string, initHash: string): boolean {
     return false;
   }
 
-  if (existing.content_hash !== initHash) {
-    throw new Error('AUTHORIZATION_FAILED: Invalid write permission proof for deletion.');
+  const serverAuthHash = hashProof(authProof);
+  if (existing.auth_hash && existing.auth_hash !== serverAuthHash) {
+    throw new Error('AUTH_FAILED: Incorrect passphrase for pad deletion.');
   }
 
   const deleteStmt = db.prepare('DELETE FROM pads WHERE slug = ?');

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPad, savePad, deletePad } from '@/lib/db';
+import { broadcastPadUpdate } from '@/lib/syncEvents';
 
 export async function GET(
   request: NextRequest,
@@ -11,11 +12,23 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid pad identifier' }, { status: 400 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const versionOnly = searchParams.get('versionOnly') === '1';
+
     const pad = getPad(slug);
     if (!pad) {
       return NextResponse.json({
         exists: false,
         slug,
+      });
+    }
+
+    if (versionOnly) {
+      return NextResponse.json({
+        exists: true,
+        slug: pad.slug,
+        version: pad.version,
+        updatedAt: pad.updated_at,
       });
     }
 
@@ -46,24 +59,27 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { encryptedContent, initHash, currentHash, expiresAt, burnAfterRead } = body;
+    const { encryptedContent, authProof, expectedVersion, expiresAt, burnAfterRead } = body;
 
     if (!encryptedContent || typeof encryptedContent !== 'string') {
       return NextResponse.json({ error: 'Missing encrypted content' }, { status: 400 });
     }
 
-    if (!currentHash || typeof currentHash !== 'string') {
-      return NextResponse.json({ error: 'Missing current hash authorization proof' }, { status: 400 });
+    if (!authProof || typeof authProof !== 'string') {
+      return NextResponse.json({ error: 'Missing authorization proof' }, { status: 400 });
     }
 
     const result = savePad({
       slug,
       encryptedContent,
-      initHash,
-      currentHash,
+      authProof,
+      expectedVersion: expectedVersion ? Number(expectedVersion) : undefined,
       expiresAt: expiresAt ? Number(expiresAt) : null,
       burnAfterRead: Boolean(burnAfterRead),
     });
+
+    // Broadcast real-time update event to all connected devices/tabs
+    broadcastPadUpdate(slug, result.version);
 
     return NextResponse.json({
       success: true,
@@ -74,8 +90,14 @@ export async function POST(
     console.error('API POST /pad error:', error);
     if (error.message?.includes('CONCURRENCY_CONFLICT')) {
       return NextResponse.json(
-        { error: 'Conflict: This pad was updated by another session or authorization proof failed.' },
+        { error: 'Conflict: This pad was updated by another session or device. Please sync before saving.' },
         { status: 409 }
+      );
+    }
+    if (error.message?.includes('AUTH_FAILED')) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Incorrect passphrase for this pad.' },
+        { status: 401 }
       );
     }
     return NextResponse.json({ error: error.message || 'Failed to save pad' }, { status: 500 });
@@ -93,13 +115,13 @@ export async function DELETE(
     }
 
     const body = await request.json();
-    const { initHash } = body;
+    const { authProof } = body;
 
-    if (!initHash) {
+    if (!authProof) {
       return NextResponse.json({ error: 'Missing deletion authorization proof' }, { status: 400 });
     }
 
-    const deleted = deletePad(slug, initHash);
+    const deleted = deletePad(slug, authProof);
     if (!deleted) {
       return NextResponse.json({ error: 'Pad not found' }, { status: 404 });
     }

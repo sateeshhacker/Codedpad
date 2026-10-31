@@ -4,6 +4,9 @@ import React, { useMemo } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { python } from '@codemirror/lang-python';
+import { java } from '@codemirror/lang-java';
+import { rust } from '@codemirror/lang-rust';
+import { go } from '@codemirror/lang-go';
 import { markdown } from '@codemirror/lang-markdown';
 import { html } from '@codemirror/lang-html';
 import { css } from '@codemirror/lang-css';
@@ -11,6 +14,7 @@ import { json } from '@codemirror/lang-json';
 import { cpp } from '@codemirror/lang-cpp';
 import { sql } from '@codemirror/lang-sql';
 import { oneDark } from '@codemirror/theme-one-dark';
+import { EditorView } from '@codemirror/view';
 
 interface CodeEditorProps {
   value: string;
@@ -22,13 +26,16 @@ interface CodeEditorProps {
 
 export const SUPPORTED_LANGUAGES = [
   { id: 'markdown', name: 'Markdown' },
+  { id: 'java', name: 'Java' },
   { id: 'javascript', name: 'JavaScript' },
   { id: 'typescript', name: 'TypeScript' },
   { id: 'python', name: 'Python' },
+  { id: 'cpp', name: 'C++' },
+  { id: 'rust', name: 'Rust' },
+  { id: 'go', name: 'Go' },
   { id: 'json', name: 'JSON' },
   { id: 'html', name: 'HTML' },
   { id: 'css', name: 'CSS' },
-  { id: 'cpp', name: 'C++' },
   { id: 'sql', name: 'SQL' },
   { id: 'text', name: 'Plain Text' },
 ];
@@ -42,7 +49,12 @@ export default function CodeEditor({
 }: CodeEditorProps) {
   const extensions = useMemo(() => {
     const list = [];
+
+    // Language extension
     switch (language.toLowerCase()) {
+      case 'java':
+        list.push(java());
+        break;
       case 'javascript':
         list.push(javascript({ jsx: true }));
         break;
@@ -51,6 +63,12 @@ export default function CodeEditor({
         break;
       case 'python':
         list.push(python());
+        break;
+      case 'rust':
+        list.push(rust());
+        break;
+      case 'go':
+        list.push(go());
         break;
       case 'markdown':
         list.push(markdown());
@@ -73,15 +91,89 @@ export default function CodeEditor({
       default:
         break;
     }
+
+    // High contrast theme overrides for 100% visible text in dark and light modes
+    const contrastTheme = EditorView.theme(
+      isDark
+        ? {
+            '&': {
+              backgroundColor: '#141416 !important',
+              color: '#f8fafc !important',
+            },
+            '.cm-content': {
+              caretColor: '#22c55e !important',
+              color: '#f8fafc !important',
+            },
+            '.cm-cursor, .cm-dropCursor': {
+              borderLeftColor: '#22c55e !important',
+              borderLeftWidth: '2px !important',
+            },
+            '.cm-gutters': {
+              backgroundColor: '#0f0f11 !important',
+              color: '#64748b !important',
+              borderRight: '1px solid #27272a !important',
+            },
+            '.cm-activeLine': {
+              backgroundColor: '#1f1f24 !important',
+            },
+            '.cm-activeLineGutter': {
+              backgroundColor: '#1f1f24 !important',
+              color: '#22c55e !important',
+            },
+            '.cm-selectionBackground, ::selection': {
+              backgroundColor: 'rgba(34, 197, 94, 0.25) !important',
+            },
+          }
+        : {
+            '&': {
+              backgroundColor: '#ffffff !important',
+              color: '#0f172a !important',
+            },
+            '.cm-content': {
+              caretColor: '#16a34a !important',
+              color: '#0f172a !important',
+            },
+            '.cm-cursor, .cm-dropCursor': {
+              borderLeftColor: '#16a34a !important',
+              borderLeftWidth: '2px !important',
+            },
+            '.cm-gutters': {
+              backgroundColor: '#f8fafc !important',
+              color: '#94a3b8 !important',
+              borderRight: '1px solid #e2e8f0 !important',
+            },
+            '.cm-activeLine': {
+              backgroundColor: '#f1f5f9 !important',
+            },
+            '.cm-activeLineGutter': {
+              backgroundColor: '#f1f5f9 !important',
+              color: '#16a34a !important',
+            },
+            '.cm-selectionBackground, ::selection': {
+              backgroundColor: 'rgba(22, 163, 74, 0.2) !important',
+            },
+          },
+      { dark: isDark }
+    );
+
+    list.push(contrastTheme);
+    if (isDark) {
+      list.push(oneDark);
+    }
+
     return list;
-  }, [language]);
+  }, [language, isDark]);
 
   return (
-    <div className="w-full h-full flex flex-col overflow-hidden text-sm">
+    <div
+      className={`w-full h-full flex flex-col overflow-hidden text-sm transition-colors ${
+        isDark ? 'bg-[#141416] text-[#f8fafc]' : 'bg-white text-[#0f172a]'
+      }`}
+    >
       <CodeMirror
         value={value}
         height="100%"
-        theme={isDark ? oneDark : undefined}
+        theme={isDark ? 'dark' : 'light'}
         extensions={extensions}
         onChange={onChange}
         onUpdate={(viewUpdate) => {

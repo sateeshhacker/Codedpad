@@ -56,13 +56,9 @@ export async function sha256(text: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-// SHA-512 helper for auth/write proofs
-export async function sha512(text: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(text);
-  const hashBuffer = await crypto.subtle.digest('SHA-512', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+// Compute client-side zero-knowledge authorization proof
+export async function computeAuthProof(password: string, slug: string): Promise<string> {
+  return sha256(password + '::codedpad::' + slug.toLowerCase());
 }
 
 // PBKDF2 Key Derivation
@@ -234,18 +230,4 @@ export async function decryptPad(
     console.error('Decryption parse error:', err);
     return { success: false };
   }
-}
-
-/**
- * Generate Write Permission Proof for Zero-Knowledge Concurrency Control
- */
-export async function generateWriteProof(
-  tabs: PadTab[],
-  password: string,
-  version: number
-): Promise<string> {
-  const combinedContent = tabs.map((t) => t.title + ':' + t.content).join('||');
-  const passwordHash = await sha512(password);
-  const proof = await sha512(combinedContent + passwordHash);
-  return proof + `_v${version}`;
 }

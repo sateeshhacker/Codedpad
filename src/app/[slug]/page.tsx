@@ -12,7 +12,7 @@ import {
   PadTab,
   decryptPad,
   encryptPad,
-  generateWriteProof,
+  computeAuthProof,
   DecryptedPadData,
 } from '@/lib/crypto';
 import {
@@ -20,9 +20,8 @@ import {
   ShieldCheck,
   Flame,
   AlertTriangle,
-  FileCode,
-  CheckCircle2,
-  Clock,
+  RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 
 const DEFAULT_INITIAL_TABS: PadTab[] = [
@@ -30,7 +29,7 @@ const DEFAULT_INITIAL_TABS: PadTab[] = [
     id: 'tab-1',
     title: 'notes.md',
     language: 'markdown',
-    content: `# Welcome to your CodedPad 🔒\n\nThis note is zero-knowledge encrypted in your browser using **hardware-accelerated AES-GCM-256**.\n\n### Quick Features:\n- ✍️ **Code & Text:** Syntax highlighting for 50+ languages.\n- 👁️ **Live Split Markdown:** Toggle the columns icon on the top bar.\n- 🔐 **Plausible Deniability:** Configure an alternate decoy password under Settings.\n- 🔥 **Burn-After-Reading & TTL:** Auto-destruct notes after reading.\n- ⌨️ **Keyboard Shortcut:** Press \`Ctrl+S\` (or \`Cmd+S\`) to encrypt and save.\n`,
+    content: `# Welcome to your CodedPad 🔒\n\nThis note is zero-knowledge encrypted in your browser using **hardware-accelerated AES-GCM-256**.\n\n### Quick Features:\n- ✍️ **Code & Text:** Syntax highlighting for 50+ languages (Java, Python, JS/TS, C++, Go, Rust, etc.).\n- 👁️ **Live Split Markdown:** Toggle the columns icon on the top bar.\n- 🔐 **Plausible Deniability:** Configure an alternate decoy password under Settings.\n- 🔥 **Burn-After-Reading & TTL:** Auto-destruct notes after reading.\n- 🔄 **Real-Time Sync:** Real-time multi-device synchronization active.\n- ⌨️ **Keyboard Shortcut:** Press \`Ctrl+S\` (or \`Cmd+S\`) to encrypt and save.\n`,
   },
 ];
 
@@ -66,6 +65,7 @@ export default function PadPage() {
   const [saving, setSaving] = useState(false);
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [remoteUpdateAvailable, setRemoteUpdateAvailable] = useState<number | null>(null);
 
   // Modals
   const [showUnlockModal, setShowUnlockModal] = useState(false);
@@ -79,13 +79,44 @@ export default function PadPage() {
   // Active Tab
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
+  // Ref to hold latest state for SSE callbacks without recreating listeners
+  const stateRef = useRef({
+    version,
+    password,
+    hasUnsavedChanges,
+    isUnlocked,
+  });
+
+  useEffect(() => {
+    stateRef.current = { version, password, hasUnsavedChanges, isUnlocked };
+  }, [version, password, hasUnsavedChanges, isUnlocked]);
+
+  // Synchronize Dark / Light Theme with document.documentElement and localStorage
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('codedpad_theme');
+    if (savedTheme) {
+      const dark = savedTheme === 'dark';
+      setIsDark(dark);
+      document.documentElement.classList.toggle('dark', dark);
+    } else {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      setIsDark(prefersDark);
+      document.documentElement.classList.toggle('dark', prefersDark);
+    }
+  }, []);
+
+  const handleToggleTheme = () => {
+    setIsDark((prev) => {
+      const next = !prev;
+      document.documentElement.classList.toggle('dark', next);
+      localStorage.setItem('codedpad_theme', next ? 'dark' : 'light');
+      return next;
+    });
+  };
+
   // Fetch Pad on mount
   useEffect(() => {
     if (!slug) return;
-
-    // Load dark mode preference from local storage or match media
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setIsDark(prefersDark);
 
     async function fetchPad() {
       setLoading(true);
@@ -138,7 +169,7 @@ export default function PadPage() {
 
     setPassword(pwd);
     setTabs(result.data.tabs);
-    setLastSavedTabs(result.data.tabs);
+    setLastSavedTabs(JSON.parse(JSON.stringify(result.data.tabs)));
     if (result.data.activeTabId) {
       setActiveTabId(result.data.activeTabId);
     }
@@ -147,7 +178,7 @@ export default function PadPage() {
     setShowUnlockModal(false);
 
     if (burnAfterRead) {
-      setStatusMessage('Warning: Burn-after-reading active! This note has now self-destructed on the server.');
+      setStatusMessage('Warning: Burn-after-reading active! Note destroyed on server.');
     } else {
       setStatusMessage('Pad unlocked & decrypted successfully');
     }
@@ -156,10 +187,104 @@ export default function PadPage() {
     return true;
   };
 
+  // Perform background sync when a remote update is detected
+  const performRemoteSync = useCallback(async (incomingVersion?: number) => {
+    try {
+      const res = await fetch(`/api/pad/${slug}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.exists) return;
+
+      const currentPwd = stateRef.current.password;
+      if (!currentPwd) return;
+
+      const result = await decryptPad(data.encryptedContent, currentPwd, slug);
+      if (result.success && result.data) {
+        setTabs(result.data.tabs);
+        setLastSavedTabs(JSON.parse(JSON.stringify(result.data.tabs)));
+        if (result.data.activeTabId) {
+          setActiveTabId(result.data.activeTabId);
+        }
+        setVersion(data.version);
+        setRawEncryptedJson(data.encryptedContent);
+        setRemoteUpdateAvailable(null);
+        setHasUnsavedChanges(false);
+
+        setStatusMessage('🔄 Real-time sync: updated from another session.');
+        setTimeout(() => setStatusMessage(null), 4000);
+      }
+    } catch (err) {
+      console.error('Remote sync error:', err);
+    }
+  }, [slug]);
+
+  // Real-Time Synchronization Listener (Server-Sent Events + Polling Fallback)
+  useEffect(() => {
+    if (!slug) return;
+
+    let eventSource: EventSource | null = null;
+    let pollInterval: NodeJS.Timeout | null = null;
+
+    try {
+      eventSource = new EventSource(`/api/pad/${slug}/events`);
+
+      eventSource.addEventListener('pad_update', (e: MessageEvent) => {
+        try {
+          const payload = JSON.parse(e.data);
+          const incomingVersion = Number(payload.version);
+          const currentVersion = stateRef.current.version;
+          const isCurrentlyUnlocked = stateRef.current.isUnlocked;
+
+          if (incomingVersion > currentVersion && isCurrentlyUnlocked) {
+            if (!stateRef.current.hasUnsavedChanges) {
+              // Automatically sync seamlessly
+              performRemoteSync(incomingVersion);
+            } else {
+              // Notify user of conflict so their local typing is not wiped
+              setRemoteUpdateAvailable(incomingVersion);
+            }
+          }
+        } catch (err) {
+          console.error('Failed to parse SSE pad_update:', err);
+        }
+      });
+    } catch (err) {
+      console.error('EventSource initialization failed:', err);
+    }
+
+    // Polling fallback every 4 seconds in case SSE disconnected
+    pollInterval = setInterval(async () => {
+      if (!stateRef.current.isUnlocked) return;
+      try {
+        const res = await fetch(`/api/pad/${slug}?versionOnly=1`);
+        if (res.ok) {
+          const info = await res.json();
+          if (info.exists && info.version > stateRef.current.version) {
+            if (!stateRef.current.hasUnsavedChanges) {
+              performRemoteSync(info.version);
+            } else {
+              setRemoteUpdateAvailable(info.version);
+            }
+          }
+        }
+      } catch {
+        // Network silent catch
+      }
+    }, 4000);
+
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
+  }, [slug, performRemoteSync]);
+
   // Save Pad handler
   const handleSave = useCallback(async () => {
     if (!password) {
-      // Must set a password before first save
       setShowPasswordSetupModal(true);
       return;
     }
@@ -200,20 +325,17 @@ export default function PadPage() {
         slug,
       });
 
-      // 2. Generate Zero-Knowledge Write Proofs
-      const initHash = padExists
-        ? await generateWriteProof(lastSavedTabs, password, version)
-        : '';
-      const currentHash = await generateWriteProof(tabs, password, padExists ? version : 1);
+      // 2. Compute Zero-Knowledge Authorization Proof
+      const authProof = await computeAuthProof(password, slug);
 
-      // 3. Transmit only ciphertext and proofs to server
+      // 3. Transmit to server with expectedVersion
       const res = await fetch(`/api/pad/${slug}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           encryptedContent: encryptedPackage,
-          initHash: padExists ? initHash : undefined,
-          currentHash,
+          authProof,
+          expectedVersion: padExists ? version : 1,
           expiresAt: expiryTimestamp,
           burnAfterRead,
         }),
@@ -228,10 +350,11 @@ export default function PadPage() {
       setPadExists(true);
       setRawEncryptedJson(encryptedPackage);
       setVersion(responseData.version);
-      setLastSavedTabs(tabs);
+      setLastSavedTabs(JSON.parse(JSON.stringify(tabs)));
       setHasUnsavedChanges(false);
+      setRemoteUpdateAvailable(null);
 
-      setStatusMessage('Changes encrypted and saved to cloud.');
+      setStatusMessage('✓ Encrypted and saved to cloud.');
       setTimeout(() => setStatusMessage(null), 3000);
     } catch (err: any) {
       console.error('Save error:', err);
@@ -245,7 +368,6 @@ export default function PadPage() {
     decoyContent,
     tabs,
     activeTabId,
-    lastSavedTabs,
     slug,
     padExists,
     version,
@@ -257,7 +379,6 @@ export default function PadPage() {
   const handlePasswordSet = async (newPassword: string): Promise<boolean> => {
     setPassword(newPassword);
     setShowPasswordSetupModal(false);
-    // Proceed directly to save with the newly set password
     setTimeout(() => {
       handleSave();
     }, 100);
@@ -332,7 +453,11 @@ export default function PadPage() {
   const lineCount = currentContent.split('\n').length;
 
   return (
-    <div className={`h-screen flex flex-col overflow-hidden font-sans ${isDark ? 'dark bg-[#121214]' : 'bg-neutral-50'}`}>
+    <div
+      className={`h-screen flex flex-col overflow-hidden font-sans transition-colors ${
+        isDark ? 'dark bg-[#121214] text-[#f8fafc]' : 'bg-neutral-50 text-[#0f172a]'
+      }`}
+    >
       {/* Top Navigation */}
       <Navbar
         slug={slug}
@@ -353,10 +478,34 @@ export default function PadPage() {
         isSplitView={isSplitView}
         onToggleSplitView={() => setIsSplitView(!isSplitView)}
         isDark={isDark}
-        onToggleTheme={() => setIsDark(!isDark)}
+        onToggleTheme={handleToggleTheme}
         isDecoyActive={isDecoyActive}
         saving={saving}
       />
+
+      {/* Real-time Update Notification Bar */}
+      {remoteUpdateAvailable && (
+        <div className="bg-amber-500 text-neutral-900 px-4 py-2 text-xs font-semibold flex items-center justify-between shadow-sm z-20">
+          <div className="flex items-center gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin" />
+            <span>This pad was updated from another device (Version {remoteUpdateAvailable}).</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => performRemoteSync(remoteUpdateAvailable)}
+              className="px-3 py-1 bg-neutral-900 text-white rounded-lg text-xs font-bold hover:bg-neutral-800 transition"
+            >
+              Sync Latest Changes
+            </button>
+            <button
+              onClick={() => setRemoteUpdateAvailable(null)}
+              className="px-2 py-1 text-neutral-800 hover:text-black transition"
+            >
+              Keep My Version
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Workspace Area */}
       <div className="flex-1 flex overflow-hidden relative">
@@ -364,7 +513,7 @@ export default function PadPage() {
           <div className="flex-1 flex items-center justify-center">
             <div className="flex flex-col items-center gap-3">
               <div className="w-8 h-8 border-3 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
-              <span className="text-xs font-mono text-neutral-500">Checking pad encryption status...</span>
+              <span className="text-xs font-mono text-neutral-500">Connecting zero-knowledge vault...</span>
             </div>
           </div>
         ) : !isUnlocked ? (
@@ -390,7 +539,13 @@ export default function PadPage() {
           /* Unlocked Workspace: Editor and Split Preview */
           <div className="flex-1 flex overflow-hidden">
             {/* CodeMirror Editor Pane */}
-            <div className={`h-full flex flex-col ${isSplitView && activeTab?.language === 'markdown' ? 'w-1/2 border-r border-neutral-200 dark:border-neutral-800' : 'w-full'}`}>
+            <div
+              className={`h-full flex flex-col ${
+                isSplitView && activeTab?.language === 'markdown'
+                  ? 'w-1/2 border-r border-neutral-200 dark:border-neutral-800'
+                  : 'w-full'
+              }`}
+            >
               <CodeEditor
                 value={activeTab?.content || ''}
                 onChange={handleContentChange}
@@ -418,15 +573,24 @@ export default function PadPage() {
             AES-GCM-256 (ZK)
           </span>
 
+          <span className="text-neutral-300 dark:text-neutral-700">|</span>
+
+          <span className="flex items-center gap-1 text-neutral-400">
+            <RefreshCw className="w-3 h-3 text-emerald-500" />
+            Live Sync: Active
+          </span>
+
           {statusMessage && (
-            <span className="text-amber-500 dark:text-amber-400 font-sans font-semibold animate-pulse">
+            <span className="text-emerald-500 dark:text-emerald-400 font-sans font-semibold animate-pulse ml-2">
               {statusMessage}
             </span>
           )}
         </div>
 
         <div className="flex items-center gap-4">
-          <span>Ln {cursorPos.line}, Col {cursorPos.col}</span>
+          <span>
+            Ln {cursorPos.line}, Col {cursorPos.col}
+          </span>
           <span>{lineCount} lines</span>
           <span>{wordCount} words</span>
           <span>{charCount} chars</span>
