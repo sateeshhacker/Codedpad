@@ -42,6 +42,8 @@ interface NavbarProps {
   onToggleTheme: () => void;
   isDecoyActive?: boolean;
   saving?: boolean;
+  lastSavedTime?: string | null;
+  autoSaveEnabled?: boolean;
 }
 
 export default function Navbar({
@@ -66,6 +68,8 @@ export default function Navbar({
   onToggleTheme,
   isDecoyActive,
   saving,
+  lastSavedTime,
+  autoSaveEnabled,
 }: NavbarProps) {
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
@@ -195,6 +199,7 @@ export default function Navbar({
             <button
               onClick={onSave}
               disabled={saving}
+              title={hasUnsavedChanges ? "Click or press Ctrl+S to save" : autoSaveEnabled ? "Auto-save active" : "All changes saved"}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition ${
                 hasUnsavedChanges
                   ? 'bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse'
@@ -206,7 +211,15 @@ export default function Navbar({
               ) : (
                 <Save className="w-3.5 h-3.5" />
               )}
-              <span className="hidden sm:inline">{hasUnsavedChanges ? 'Save Changes' : 'Saved'}</span>
+              <span className="hidden sm:inline">
+                {saving
+                  ? 'Saving...'
+                  : hasUnsavedChanges
+                  ? 'Save'
+                  : lastSavedTime
+                  ? `Saved ${lastSavedTime}`
+                  : 'Saved'}
+              </span>
             </button>
 
             {/* Change Master Password */}

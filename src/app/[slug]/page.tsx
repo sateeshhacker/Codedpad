@@ -21,6 +21,7 @@ import {
   Flame,
   AlertTriangle,
   RefreshCw,
+  Clock,
   Sparkles,
 } from 'lucide-react';
 
@@ -29,7 +30,7 @@ const DEFAULT_INITIAL_TABS: PadTab[] = [
     id: 'tab-1',
     title: 'notes.md',
     language: 'markdown',
-    content: `# Welcome to your CodedPad 🔒\n\nThis note is zero-knowledge encrypted in your browser using **hardware-accelerated AES-GCM-256**.\n\n### Quick Features:\n- ✍️ **Code & Text:** Syntax highlighting for 50+ languages (Java, Python, JS/TS, C++, Go, Rust, etc.).\n- 👁️ **Live Split Markdown:** Toggle the columns icon on the top bar.\n- 🔐 **Plausible Deniability:** Configure an alternate decoy password under Settings.\n- 🔥 **Burn-After-Reading & TTL:** Auto-destruct notes after reading.\n- 🔄 **Real-Time Sync:** Real-time multi-device synchronization active.\n- ⌨️ **Keyboard Shortcut:** Press \`Ctrl+S\` (or \`Cmd+S\`) to encrypt and save.\n`,
+    content: `# Welcome to your CodedPad 🔒\n\nThis note is zero-knowledge encrypted in your browser using **hardware-accelerated AES-GCM-256**.\n\n### Quick Features:\n- ✍️ **Code & Text:** Syntax highlighting for 50+ languages (Java, Python, JS/TS, C++, Go, Rust, etc.).\n- 👁️ **Live Split Markdown:** Toggle the columns icon on the top bar.\n- 🔐 **Plausible Deniability:** Configure an alternate decoy password under Settings.\n- 🔥 **Burn-After-Reading & TTL:** Auto-destruct notes after reading.\n- 🔄 **Real-Time Sync:** Instant multi-device synchronization active.\n- 💾 **Smart Auto-Save:** Auto-saves on idle pause (2.5s) or every 30 seconds.\n- ⌨️ **Keyboard Shortcut:** Press \`Ctrl+S\` (or \`Cmd+S\`) to encrypt and save.\n`,
   },
 ];
 
@@ -59,6 +60,13 @@ export default function PadPage() {
   const [activeTabId, setActiveTabId] = useState<string>('tab-1');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+  // Auto-Save State
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+  const [autoSaveMode, setAutoSaveMode] = useState<'smart' | 'interval'>('smart');
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const firstUnsavedChangeTimeRef = useRef<number | null>(null);
+
   // UI state
   const [isDark, setIsDark] = useState(true);
   const [isSplitView, setIsSplitView] = useState(true);
@@ -79,17 +87,51 @@ export default function PadPage() {
   // Active Tab
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
-  // Ref to hold latest state for SSE callbacks without recreating listeners
+  // Ref to hold latest state for callbacks
   const stateRef = useRef({
     version,
     password,
     hasUnsavedChanges,
     isUnlocked,
+    tabs,
+    activeTabId,
+    decoyPassword,
+    decoyContent,
+    slug,
+    padExists,
+    expiresInMinutes,
+    burnAfterRead,
   });
 
   useEffect(() => {
-    stateRef.current = { version, password, hasUnsavedChanges, isUnlocked };
-  }, [version, password, hasUnsavedChanges, isUnlocked]);
+    stateRef.current = {
+      version,
+      password,
+      hasUnsavedChanges,
+      isUnlocked,
+      tabs,
+      activeTabId,
+      decoyPassword,
+      decoyContent,
+      slug,
+      padExists,
+      expiresInMinutes,
+      burnAfterRead,
+    };
+  }, [
+    version,
+    password,
+    hasUnsavedChanges,
+    isUnlocked,
+    tabs,
+    activeTabId,
+    decoyPassword,
+    decoyContent,
+    slug,
+    padExists,
+    expiresInMinutes,
+    burnAfterRead,
+  ]);
 
   // Synchronize Dark / Light Theme with document.documentElement and localStorage
   useEffect(() => {
@@ -103,6 +145,11 @@ export default function PadPage() {
       setIsDark(prefersDark);
       document.documentElement.classList.toggle('dark', prefersDark);
     }
+
+    const savedAutoSave = localStorage.getItem('codedpad_autosave');
+    if (savedAutoSave !== null) {
+      setAutoSaveEnabled(savedAutoSave === 'true');
+    }
   }, []);
 
   const handleToggleTheme = () => {
@@ -112,6 +159,11 @@ export default function PadPage() {
       localStorage.setItem('codedpad_theme', next ? 'dark' : 'light');
       return next;
     });
+  };
+
+  const handleAutoSaveToggle = (enabled: boolean) => {
+    setAutoSaveEnabled(enabled);
+    localStorage.setItem('codedpad_autosave', String(enabled));
   };
 
   // Fetch Pad on mount
@@ -156,6 +208,9 @@ export default function PadPage() {
   useEffect(() => {
     const isDifferent = JSON.stringify(tabs) !== JSON.stringify(lastSavedTabs);
     setHasUnsavedChanges(isDifferent);
+    if (!isDifferent) {
+      firstUnsavedChangeTimeRef.current = null;
+    }
   }, [tabs, lastSavedTabs]);
 
   // Unlock existing pad
@@ -237,10 +292,8 @@ export default function PadPage() {
 
           if (incomingVersion > currentVersion && isCurrentlyUnlocked) {
             if (!stateRef.current.hasUnsavedChanges) {
-              // Automatically sync seamlessly
               performRemoteSync(incomingVersion);
             } else {
-              // Notify user of conflict so their local typing is not wiped
               setRemoteUpdateAvailable(incomingVersion);
             }
           }
@@ -252,7 +305,7 @@ export default function PadPage() {
       console.error('EventSource initialization failed:', err);
     }
 
-    // Polling fallback every 4 seconds in case SSE disconnected
+    // Polling fallback every 4 seconds
     pollInterval = setInterval(async () => {
       if (!stateRef.current.isUnlocked) return;
       try {
@@ -283,31 +336,33 @@ export default function PadPage() {
   }, [slug, performRemoteSync]);
 
   // Save Pad handler
-  const handleSave = useCallback(async () => {
-    if (!password) {
-      setShowPasswordSetupModal(true);
+  const handleSave = useCallback(async (isSilent = false) => {
+    const current = stateRef.current;
+    if (!current.password) {
+      if (!isSilent) {
+        setShowPasswordSetupModal(true);
+      }
       return;
     }
 
     setSaving(true);
-    setStatusMessage(null);
 
     try {
       let expiryTimestamp: number | null = null;
-      if (expiresInMinutes) {
-        expiryTimestamp = Date.now() + expiresInMinutes * 60 * 1000;
+      if (current.expiresInMinutes) {
+        expiryTimestamp = Date.now() + current.expiresInMinutes * 60 * 1000;
       }
 
       // Build decoy payload if configured
       let decoyPayload: DecryptedPadData | undefined = undefined;
-      if (decoyPassword && decoyContent) {
+      if (current.decoyPassword && current.decoyContent) {
         decoyPayload = {
           tabs: [
             {
               id: 'decoy-1',
               title: 'general.txt',
               language: 'text',
-              content: decoyContent,
+              content: current.decoyContent,
             },
           ],
         };
@@ -316,28 +371,28 @@ export default function PadPage() {
       // 1. Client-Side Hardware Encryption
       const encryptedPackage = await encryptPad({
         data: {
-          tabs,
-          activeTabId,
+          tabs: current.tabs,
+          activeTabId: current.activeTabId,
         },
-        primaryPassword: password,
-        decoyPassword: decoyPassword || undefined,
+        primaryPassword: current.password,
+        decoyPassword: current.decoyPassword || undefined,
         decoyData: decoyPayload,
-        slug,
+        slug: current.slug,
       });
 
       // 2. Compute Zero-Knowledge Authorization Proof
-      const authProof = await computeAuthProof(password, slug);
+      const authProof = await computeAuthProof(current.password, current.slug);
 
-      // 3. Transmit to server with expectedVersion
-      const res = await fetch(`/api/pad/${slug}`, {
+      // 3. Transmit to server
+      const res = await fetch(`/api/pad/${current.slug}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           encryptedContent: encryptedPackage,
           authProof,
-          expectedVersion: padExists ? version : 1,
+          expectedVersion: current.padExists ? current.version : 1,
           expiresAt: expiryTimestamp,
-          burnAfterRead,
+          burnAfterRead: current.burnAfterRead,
         }),
       });
 
@@ -350,37 +405,107 @@ export default function PadPage() {
       setPadExists(true);
       setRawEncryptedJson(encryptedPackage);
       setVersion(responseData.version);
-      setLastSavedTabs(JSON.parse(JSON.stringify(tabs)));
+      setLastSavedTabs(JSON.parse(JSON.stringify(current.tabs)));
       setHasUnsavedChanges(false);
       setRemoteUpdateAvailable(null);
+      firstUnsavedChangeTimeRef.current = null;
 
-      setStatusMessage('✓ Encrypted and saved to cloud.');
-      setTimeout(() => setStatusMessage(null), 3000);
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setLastSavedTime(timeStr);
+
+      if (!isSilent) {
+        setStatusMessage('✓ Encrypted and saved.');
+        setTimeout(() => setStatusMessage(null), 3000);
+      }
     } catch (err: any) {
       console.error('Save error:', err);
-      alert('Save Error: ' + (err.message || 'Unable to save pad'));
+      if (!isSilent) {
+        alert('Save Error: ' + (err.message || 'Unable to save pad'));
+      }
     } finally {
       setSaving(false);
     }
-  }, [
-    password,
-    decoyPassword,
-    decoyContent,
-    tabs,
-    activeTabId,
-    slug,
-    padExists,
-    version,
-    expiresInMinutes,
-    burnAfterRead,
-  ]);
+  }, []);
+
+  // Smart Auto-Save Mechanism
+  useEffect(() => {
+    if (!autoSaveEnabled || !password || !isUnlocked || !hasUnsavedChanges || saving) {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+      return;
+    }
+
+    if (!firstUnsavedChangeTimeRef.current) {
+      firstUnsavedChangeTimeRef.current = Date.now();
+    }
+
+    if (autoSaveMode === 'smart') {
+      const timeSinceFirstChange = Date.now() - (firstUnsavedChangeTimeRef.current || Date.now());
+      // Max wait safety ceiling: if user has been typing without pausing for 30 seconds, save anyway!
+      if (timeSinceFirstChange >= 30000) {
+        handleSave(true);
+        return;
+      }
+
+      // Debounce: save 2.5 seconds after user pauses typing
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+      autoSaveTimerRef.current = setTimeout(() => {
+        handleSave(true);
+      }, 2500);
+    } else {
+      // Fixed 30s interval mode
+      if (!autoSaveTimerRef.current) {
+        autoSaveTimerRef.current = setTimeout(() => {
+          handleSave(true);
+        }, 30000);
+      }
+    }
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [tabs, hasUnsavedChanges, autoSaveEnabled, autoSaveMode, password, isUnlocked, saving, handleSave]);
+
+  // Save on tab blur or window minimize
+  useEffect(() => {
+    const handleBlur = () => {
+      if (
+        autoSaveEnabled &&
+        stateRef.current.hasUnsavedChanges &&
+        stateRef.current.password &&
+        stateRef.current.isUnlocked
+      ) {
+        handleSave(true);
+      }
+    };
+
+    window.addEventListener('blur', handleBlur);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        handleBlur();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('blur', handleBlur);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [autoSaveEnabled, handleSave]);
 
   // Initial Password Set
   const handlePasswordSet = async (newPassword: string): Promise<boolean> => {
     setPassword(newPassword);
     setShowPasswordSetupModal(false);
     setTimeout(() => {
-      handleSave();
+      handleSave(false);
     }, 100);
     return true;
   };
@@ -398,7 +523,7 @@ export default function PadPage() {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         if (isUnlocked) {
-          handleSave();
+          handleSave(false);
         }
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l') {
         e.preventDefault();
@@ -470,7 +595,7 @@ export default function PadPage() {
         onChangeLanguage={handleChangeLanguage}
         isUnlocked={isUnlocked}
         hasUnsavedChanges={hasUnsavedChanges}
-        onSave={handleSave}
+        onSave={() => handleSave(false)}
         onLock={handleLock}
         onOpenSettings={() => setShowSettingsModal(true)}
         onOpenShare={() => setShowShareModal(true)}
@@ -481,6 +606,8 @@ export default function PadPage() {
         onToggleTheme={handleToggleTheme}
         isDecoyActive={isDecoyActive}
         saving={saving}
+        lastSavedTime={lastSavedTime}
+        autoSaveEnabled={autoSaveEnabled}
       />
 
       {/* Real-time Update Notification Bar */}
@@ -580,6 +707,17 @@ export default function PadPage() {
             Live Sync: Active
           </span>
 
+          <span className="text-neutral-300 dark:text-neutral-700">|</span>
+
+          <span className="flex items-center gap-1 text-neutral-400">
+            <Clock className="w-3 h-3 text-emerald-500" />
+            {autoSaveEnabled ? (
+              <span>Auto-save: ON ({autoSaveMode === 'smart' ? '2.5s idle / 30s max' : '30s'})</span>
+            ) : (
+              <span className="text-neutral-400">Auto-save: OFF</span>
+            )}
+          </span>
+
           {statusMessage && (
             <span className="text-emerald-500 dark:text-emerald-400 font-sans font-semibold animate-pulse ml-2">
               {statusMessage}
@@ -619,7 +757,7 @@ export default function PadPage() {
         isInitialSetup={true}
       />
 
-      {/* Settings Modal (TTL, Burn-after-read, Decoy Password) */}
+      {/* Settings Modal (TTL, Burn-after-read, Decoy Password, Auto-Save) */}
       <SettingsModal
         isOpen={showSettingsModal}
         onClose={() => setShowSettingsModal(false)}
@@ -627,6 +765,10 @@ export default function PadPage() {
         onExpiresChange={setExpiresInMinutes}
         burnAfterRead={burnAfterRead}
         onBurnAfterReadChange={setBurnAfterRead}
+        autoSaveEnabled={autoSaveEnabled}
+        onAutoSaveEnabledChange={handleAutoSaveToggle}
+        autoSaveMode={autoSaveMode}
+        onAutoSaveModeChange={setAutoSaveMode}
         decoyPassword={decoyPassword}
         onDecoyPasswordChange={setDecoyPassword}
         decoyNoteContent={decoyContent}
