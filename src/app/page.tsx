@@ -1,169 +1,289 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Code2,
-  Lock,
-  ShieldCheck,
-  Flame,
-  ArrowRight,
   Shuffle,
-  FileCode,
-  Sparkles,
-  Smartphone,
-  CheckCircle2,
+  Shield,
+  Zap,
+  Flame,
 } from 'lucide-react';
 
-// Generates memorable random words for slugs
-const ADJECTIVES = ['quick', 'silent', 'secure', 'bright', 'cyber', 'cryptic', 'iron', 'cosmic', 'zen'];
-const NOUNS = ['vault', 'matrix', 'cipher', 'nexus', 'pad', 'beacon', 'gateway', 'prism', 'node'];
+const ADJECTIVES = ['silent', 'stealth', 'cipher', 'quantum', 'shadow', 'zen', 'iron', 'vector', 'dark', 'bright'];
+const NOUNS = ['vault', 'space', 'notes', 'beacon', 'buffer', 'page', 'pad', 'core', 'folder', 'draft'];
 
 export default function HomePage() {
   const router = useRouter();
   const [slug, setSlug] = useState('');
+  const [isShuffling, setIsShuffling] = useState(false);
+
+  // Generate initial random slug on mount
+  useEffect(() => {
+    generateRandomSlug();
+  }, []);
 
   const generateRandomSlug = () => {
+    setIsShuffling(true);
     const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
     const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
-    const num = Math.floor(Math.random() * 900) + 100;
+    const num = Math.floor(Math.random() * 90) + 10;
     setSlug(`${adj}-${noun}-${num}`);
+    setTimeout(() => setIsShuffling(false), 200);
   };
 
-  const handleOpenPad = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleOpenPad = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     const clean = slug.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
-    if (clean) {
-      router.push(`/${clean}`);
-    } else {
-      generateRandomSlug();
-    }
+    const targetSlug = clean || 'my-notes';
+    router.push(`/${targetSlug}`);
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-[#121214] text-neutral-900 dark:text-neutral-100 flex flex-col font-sans transition-colors">
-      {/* Header */}
-      <header className="h-16 border-b border-neutral-200 dark:border-neutral-800 px-6 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-md">
-            <Code2 className="w-4 h-4" />
+    <div className="min-h-screen bg-black text-white flex flex-col font-sans selection:bg-[#d71921] selection:text-white bg-nothing-dots relative overflow-x-hidden">
+      {/* ================= NAVIGATION BAR ================= */}
+      <header className="sticky top-0 z-50 bg-black/85 backdrop-blur-md border-b border-[#242428] px-4 sm:px-8 py-3.5 transition-all">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          {/* Logo & Simple Tagline */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 font-headline font-bold text-lg tracking-wider text-white select-none">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#d71921] led-diode-pulse inline-block" />
+              <span>CODEDPAD</span>
+            </div>
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#131315] border border-[#242428] text-[11px] font-mono text-[#a1a1aa] tracking-wider">
+              <span>Private Notepad</span>
+            </div>
           </div>
-          <span className="font-bold text-base tracking-tight font-mono">CodedPad</span>
-          <span className="px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-            v2.0 ZK
-          </span>
-        </div>
 
-        <div className="flex items-center gap-4 text-xs font-medium text-neutral-600 dark:text-neutral-400">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Hardware AES-GCM Active
-          </span>
+          {/* Simple non-tech navigation */}
+          <nav className="hidden md:flex items-center gap-6 text-xs font-mono tracking-wider text-[#a1a1aa]">
+            <a
+              href="#security"
+              className="hover:text-white transition-colors flex items-center gap-1.5"
+            >
+              <Shield className="w-3.5 h-3.5 text-[#d71921]" />
+              <span>Private & Secure</span>
+            </a>
+            <a
+              href="#autosave"
+              className="hover:text-white transition-colors flex items-center gap-1.5"
+            >
+              <Zap className="w-3.5 h-3.5 text-white/70" />
+              <span>Auto-Save</span>
+            </a>
+            <a
+              href="#disappearing"
+              className="hover:text-white transition-colors flex items-center gap-1.5"
+            >
+              <Flame className="w-3.5 h-3.5 text-[#d71921]" />
+              <span>Self-Destruct</span>
+            </a>
+          </nav>
+
+          {/* Action Button */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleOpenPad()}
+              className="rounded-full bg-white hover:bg-[#d71921] text-black hover:text-white px-4 py-1.5 text-xs font-mono font-bold uppercase tracking-wider transition-all duration-200 active:scale-95 flex items-center gap-1.5 shadow-none"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-[#d71921] group-hover:bg-white" />
+              <span>+ New Pad</span>
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Hero & Input */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 py-16 max-w-4xl mx-auto w-full text-center">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-xs font-semibold mb-6 shadow-xs">
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Next-Gen Zero-Knowledge Code & Text Notepad</span>
+      {/* ================= HERO SECTION ================= */}
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-14 sm:py-20 max-w-5xl mx-auto w-full text-center">
+        {/* Top Badge (Friendly & Non-Tech) */}
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#131315] border border-[#242428] text-[#a1a1aa] text-xs font-mono tracking-wider mb-6">
+          <span className="w-2 h-2 rounded-full bg-[#d71921] led-diode-pulse" />
+          <span>100% Private</span>
+          <span className="text-[#38383e]">•</span>
+          <span className="text-white">No Sign-up Needed</span>
+          <span className="text-[#38383e]">•</span>
+          <span className="text-[#d71921]">Free & Instant</span>
         </div>
 
-        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-neutral-900 dark:text-white leading-[1.15]">
-          Your notes. Encrypted in browser.{' '}
-          <span className="bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">
-            No accounts required.
-          </span>
+        {/* High-Impact Main Headline */}
+        <h1 className="font-headline text-3xl sm:text-5xl md:text-6xl font-extrabold uppercase tracking-tight text-white max-w-4xl mx-auto leading-[1.12]">
+          Private Scratchpad For Your Code & Notes.
         </h1>
 
-        <p className="mt-5 text-base sm:text-lg text-neutral-600 dark:text-neutral-400 max-w-2xl mx-auto leading-relaxed">
-          Open a pad at any URL. Your text and code snippets are encrypted client-side using hardware-accelerated
-          AES-GCM-256 before leaving your device. We can never read your notes.
+        {/* Punchy 1-Line Subtitle */}
+        <p className="mt-4 text-sm sm:text-base md:text-lg text-[#a1a1aa] max-w-2xl mx-auto font-sans leading-relaxed">
+          Write notes and code securely without creating an account. Everything is locked directly on your device so only you can read it.
         </p>
 
-        {/* Dynamic Pad Creator Form */}
-        <form onSubmit={handleOpenPad} className="mt-10 w-full max-w-lg mx-auto">
-          <div className="flex flex-col sm:flex-row items-center gap-2 p-2 bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded-2xl shadow-xl focus-within:ring-2 focus-within:ring-emerald-500 transition">
-            <div className="flex items-center gap-1.5 pl-3 text-neutral-400 font-mono text-sm shrink-0">
-              <span>codedpad.com/</span>
+        {/* ================= CENTER PAD CREATOR CARD ================= */}
+        <div className="w-full max-w-2xl mt-10 bg-[#0e0e10]/90 border border-[#242428] hover:border-[#38383e] transition-all rounded-3xl p-5 sm:p-7 text-left relative shadow-2xl backdrop-blur-md">
+          {/* Card Top Header */}
+          <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-[#242428] text-xs font-mono text-[#a1a1aa]">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#d71921] led-diode-pulse" />
+              <span className="text-white font-semibold tracking-wider">
+                Create or Open a Pad
+              </span>
             </div>
-            <input
-              type="text"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              placeholder="choose-a-pad-name"
-              className="flex-1 w-full bg-transparent px-2 py-2 text-sm font-mono text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 outline-none"
-            />
-            <div className="flex items-center gap-1.5 w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={generateRandomSlug}
-                title="Generate Random Pad Name"
-                className="p-2.5 text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-xl transition"
-              >
-                <Shuffle className="w-4 h-4" />
-              </button>
+            <span className="text-[#71717a] hidden sm:inline">Instant Access</span>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleOpenPad} className="space-y-4">
+            {/* Input Well */}
+            <div className="bg-black border border-[#242428] focus-within:border-white transition-all rounded-2xl p-2 sm:p-2.5 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <div className="flex items-center flex-1 px-3">
+                <input
+                  type="text"
+                  value={slug}
+                  onChange={(e) => setSlug(e.target.value)}
+                  placeholder="Enter pad name (e.g. sateesh)"
+                  spellCheck={false}
+                  className="bg-transparent border-0 font-mono text-sm sm:text-base text-white placeholder-[#52525b] outline-none flex-1 py-1 tracking-wide"
+                />
+                <button
+                  type="button"
+                  onClick={generateRandomSlug}
+                  title="Generate Random Name"
+                  className={`p-2 rounded-xl text-[#a1a1aa] hover:text-white hover:bg-[#18181b] transition ${
+                    isShuffling ? 'rotate-180 transition-transform duration-200' : ''
+                  }`}
+                >
+                  <Shuffle className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Stark White Action Button */}
               <button
                 type="submit"
-                className="w-full sm:w-auto px-5 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 rounded-xl shadow-md flex items-center justify-center gap-2 transition"
+                className="shrink-0 rounded-full bg-white hover:bg-[#d71921] text-black hover:text-white px-6 py-3 font-mono text-xs font-bold uppercase tracking-wider transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 shadow-none cursor-pointer"
               >
-                <span>Open Pad</span>
-                <ArrowRight className="w-4 h-4" />
+                <span>OPEN PAD -&gt;</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#d71921] group-hover:bg-white inline-block" />
               </button>
             </div>
-          </div>
-          <span className="text-[11px] text-neutral-400 mt-2 block font-mono">
-            Tip: Press Enter or pick any name to start writing.
-          </span>
-        </form>
+          </form>
 
-        {/* Features Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-20 text-left w-full">
-          <div className="p-5 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 shadow-xs">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-3">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-            <h2 className="font-bold text-sm text-neutral-900 dark:text-white">Zero-Knowledge AES-GCM</h2>
-            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
-              Native Web Crypto API with PBKDF2 (100k rounds) & random IV. Decryption occurs only in memory.
-            </p>
+          {/* Simple Footer Note */}
+          <div className="mt-5 pt-3 border-t border-[#242428] flex flex-wrap justify-between items-center gap-2 text-[11px] font-mono text-[#71717a]">
+            <span>No Account Needed</span>
+            <span>•</span>
+            <span>Completely Free</span>
+            <span>•</span>
+            <span className="text-white">Private &amp; Secure</span>
           </div>
+        </div>
 
-          <div className="p-5 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 shadow-xs">
-            <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-3">
-              <FileCode className="w-5 h-5" />
+        {/* ================= 3 CLEAR BENEFIT CARDS ================= */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-16 text-left w-full max-w-5xl">
+          {/* Card 1: Private & Secure */}
+          <div
+            id="security"
+            className="p-6 rounded-3xl bg-[#0e0e10]/80 border border-[#242428] hover:border-[#38383e] transition-colors flex flex-col justify-between"
+          >
+            <div>
+              <div className="w-10 h-10 rounded-full bg-[#18181b] border border-[#242428] text-[#d71921] flex items-center justify-center mb-4">
+                <Shield className="w-5 h-5" />
+              </div>
+              <h2 className="font-headline font-bold text-lg uppercase text-white">
+                Private &amp; Secure
+              </h2>
+              <p className="mt-2 text-xs sm:text-sm text-[#a1a1aa] leading-relaxed font-sans">
+                Your notes are locked on your device before they ever leave it. Nobody else, not even us, can read what you write.
+              </p>
             </div>
-            <h2 className="font-bold text-sm text-neutral-900 dark:text-white">Multi-Tab Code Editor</h2>
-            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
-              CodeMirror 6 with syntax highlighting for 50+ languages, line numbers, and live Markdown split preview.
-            </p>
-          </div>
 
-          <div className="p-5 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 shadow-xs">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-3">
-              <Lock className="w-5 h-5" />
+            <div className="mt-6 pt-3 border-t border-[#242428] text-[11px] font-mono text-[#71717a]">
+              <span>Password protected</span>
             </div>
-            <h2 className="font-bold text-sm text-neutral-900 dark:text-white">Plausible Deniability</h2>
-            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
-              Duress decoy password opens a benign dummy note, masking your real secrets if coerced.
-            </p>
           </div>
 
-          <div className="p-5 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 shadow-xs">
-            <div className="w-9 h-9 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center mb-3">
-              <Flame className="w-5 h-5" />
+          {/* Card 2: Auto-Save */}
+          <div
+            id="autosave"
+            className="p-6 rounded-3xl bg-[#0e0e10]/80 border border-[#242428] hover:border-[#38383e] transition-colors flex flex-col justify-between"
+          >
+            <div>
+              <div className="w-10 h-10 rounded-full bg-[#18181b] border border-[#242428] text-[#d71921] flex items-center justify-center mb-4">
+                <Zap className="w-5 h-5" />
+              </div>
+              <h2 className="font-headline font-bold text-lg uppercase text-white">
+                Automatic Saving
+              </h2>
+              <p className="mt-2 text-xs sm:text-sm text-[#a1a1aa] leading-relaxed font-sans">
+                Never lose your progress. Every word and line you type is automatically saved in the background.
+              </p>
             </div>
-            <h2 className="font-bold text-sm text-neutral-900 dark:text-white">Burn & Ephemeral TTL</h2>
-            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
-              Auto-destruct after 1 view or set custom retention: 1h, 24h, 7d, or 30d with cryptographic proof.
-            </p>
+
+            <div className="mt-6 pt-3 border-t border-[#242428] text-[11px] font-mono text-[#71717a]">
+              <span>Saves as you write</span>
+            </div>
+          </div>
+
+          {/* Card 3: Self-Destruct */}
+          <div
+            id="disappearing"
+            className="p-6 rounded-3xl bg-[#0e0e10]/80 border border-[#242428] hover:border-[#38383e] transition-colors flex flex-col justify-between"
+          >
+            <div>
+              <div className="w-10 h-10 rounded-full bg-[#18181b] border border-[#242428] text-[#d71921] flex items-center justify-center mb-4">
+                <Flame className="w-5 h-5" />
+              </div>
+              <h2 className="font-headline font-bold text-lg uppercase text-white">
+                Disappearing Notes
+              </h2>
+              <p className="mt-2 text-xs sm:text-sm text-[#a1a1aa] leading-relaxed font-sans">
+                Need to share something sensitive? Set your note to permanently delete itself after it has been opened.
+              </p>
+            </div>
+
+            <div className="mt-6 pt-3 border-t border-[#242428] text-[11px] font-mono text-[#71717a]">
+              <span>Delete on read</span>
+            </div>
           </div>
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-neutral-200 dark:border-neutral-800 py-6 px-4 text-center text-xs text-neutral-500">
-        <p>Built with Next.js 15, Web Crypto API, CodeMirror 6, and SQLite. 100% Zero-Knowledge & Open Source.</p>
+      {/* ================= FOOTER ================= */}
+      <footer className="border-t border-[#242428] bg-black/90 py-6 px-4 sm:px-8 mt-12 text-xs font-mono text-[#71717a]">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-white">
+            <span className="w-2 h-2 rounded-full bg-[#d71921] inline-block" />
+            <span className="tracking-wider">CODEDPAD</span>
+          </div>
+
+          <div className="text-[11px] text-[#71717a] font-sans">
+            Simple, private notes and code.
+          </div>
+
+          <div className="flex items-center gap-6">
+            <a
+              href="#security"
+              className="hover:text-white transition-colors text-[11px]"
+            >
+              Privacy
+            </a>
+            <a
+              href="#autosave"
+              className="hover:text-white transition-colors text-[11px]"
+            >
+              Auto-Save
+            </a>
+            <button
+              onClick={() => {
+                try {
+                  localStorage.clear();
+                  sessionStorage.clear();
+                  alert('All local temporary pad data cleared.');
+                } catch {
+                  // ignore
+                }
+              }}
+              className="hover:text-[#d71921] transition-colors text-[11px]"
+            >
+              Clear Local Data
+            </button>
+          </div>
+        </div>
       </footer>
     </div>
   );

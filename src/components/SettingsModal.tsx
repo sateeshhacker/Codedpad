@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Settings, Flame, Clock, ShieldAlert, X, Check, Save, Zap } from 'lucide-react';
+import React from 'react';
+import { Settings, X } from 'lucide-react';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -12,18 +12,18 @@ interface SettingsModalProps {
   onBurnAfterReadChange: (val: boolean) => void;
   autoSaveEnabled: boolean;
   onAutoSaveEnabledChange: (val: boolean) => void;
-  autoSaveMode: 'smart' | 'interval';
-  onAutoSaveModeChange: (val: 'smart' | 'interval') => void;
-  decoyPassword: string;
-  onDecoyPasswordChange: (val: string) => void;
-  decoyNoteContent: string;
-  onDecoyNoteContentChange: (val: string) => void;
+  autoSaveMode?: 'smart' | 'interval';
+  onAutoSaveModeChange?: (val: 'smart' | 'interval') => void;
+  decoyPassword?: string;
+  onDecoyPasswordChange?: (val: string) => void;
+  decoyNoteContent?: string;
+  onDecoyNoteContentChange?: (val: string) => void;
 }
 
 export const TTL_OPTIONS = [
-  { label: 'Never (Permanent)', value: null },
+  { label: 'Never', value: null },
   { label: '1 Hour', value: 60 },
-  { label: '24 Hours (1 Day)', value: 1440 },
+  { label: '24 Hours', value: 1440 },
   { label: '7 Days', value: 10080 },
   { label: '30 Days', value: 43200 },
 ];
@@ -37,221 +37,159 @@ export default function SettingsModal({
   onBurnAfterReadChange,
   autoSaveEnabled,
   onAutoSaveEnabledChange,
-  autoSaveMode,
-  onAutoSaveModeChange,
   decoyPassword,
   onDecoyPasswordChange,
   decoyNoteContent,
   onDecoyNoteContentChange,
 }: SettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<'lifecycle' | 'duress'>('lifecycle');
-
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-lg bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in font-sans">
+      <div className="w-full max-w-md bg-[#0e0e10] border border-[#242428] rounded-3xl shadow-2xl p-5 sm:p-6 relative max-h-[90dvh] overflow-y-auto">
+        {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-1.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+          className="absolute top-5 right-5 p-1.5 text-[#71717a] hover:text-white rounded-full hover:bg-[#18181b] border border-[#242428] transition cursor-pointer"
+          title="Close"
         >
-          <X className="w-4 h-4" />
+          <X className="w-3.5 h-3.5" />
         </button>
 
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-            <Settings className="w-5 h-5" />
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-5 pb-4 border-b border-[#242428]">
+          <div className="w-9 h-9 rounded-full bg-[#18181b] border border-[#242428] text-[#d71921] flex items-center justify-center shrink-0">
+            <Settings className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-neutral-900 dark:text-white">Security & Workspace Settings</h2>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              Ephemeral retention, auto-save triggers, and plausible deniability
+            <h2 className="text-base font-headline font-bold text-white uppercase tracking-tight">
+              Pad Settings
+            </h2>
+            <p className="text-xs text-[#a1a1aa] font-sans">
+              Auto-save and auto-delete preferences
             </p>
           </div>
         </div>
 
-        {/* Tab switcher */}
-        <div className="flex border-b border-neutral-200 dark:border-neutral-800 mb-5">
-          <button
-            onClick={() => setActiveTab('lifecycle')}
-            className={`pb-2.5 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition ${
-              activeTab === 'lifecycle'
-                ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
-                : 'border-transparent text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5" />
-            Auto-Save & Expiration
-          </button>
-          <button
-            onClick={() => setActiveTab('duress')}
-            className={`pb-2.5 px-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition ${
-              activeTab === 'duress'
-                ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
-                : 'border-transparent text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200'
-            }`}
-          >
-            <ShieldAlert className="w-3.5 h-3.5" />
-            Plausible Deniability (Duress)
-          </button>
-        </div>
-
-        {activeTab === 'lifecycle' ? (
-          <div className="space-y-5">
-            {/* Auto-Save Configuration */}
-            <div className="p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-800/40">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Save className="w-4 h-4 text-emerald-500" />
-                  <span className="text-xs font-semibold text-neutral-900 dark:text-neutral-100">
-                    Automatic Cloud Save
-                  </span>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={autoSaveEnabled}
-                    onChange={(e) => onAutoSaveEnabledChange(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-9 h-5 bg-neutral-300 peer-focus:outline-none rounded-full peer dark:bg-neutral-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-neutral-600 peer-checked:bg-emerald-600"></div>
-                </label>
-              </div>
-
-              {autoSaveEnabled && (
-                <div className="space-y-2 pt-2 border-t border-neutral-200/60 dark:border-neutral-700/60">
-                  <label className="block text-[11px] font-medium text-neutral-500 mb-1">
-                    Auto-Save Mode
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onAutoSaveModeChange('smart')}
-                      className={`px-3 py-2 rounded-lg border text-left text-xs transition ${
-                        autoSaveMode === 'smart'
-                          ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300'
-                          : 'border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                      }`}
-                    >
-                      <div className="font-semibold flex items-center gap-1.5">
-                        <Zap className="w-3.5 h-3.5 text-emerald-500" />
-                        Smart Idle (Recommended)
-                      </div>
-                      <div className="text-[10px] text-neutral-400 mt-0.5">
-                        Saves 2s after you pause typing + max 30s ceiling.
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => onAutoSaveModeChange('interval')}
-                      className={`px-3 py-2 rounded-lg border text-left text-xs transition ${
-                        autoSaveMode === 'interval'
-                          ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300'
-                          : 'border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                      }`}
-                    >
-                      <div className="font-semibold flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-emerald-500" />
-                        Fixed 30s Interval
-                      </div>
-                      <div className="text-[10px] text-neutral-400 mt-0.5">
-                        Saves strictly every 30 seconds if edits exist.
-                      </div>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Expiration dropdown */}
+        {/* Settings List */}
+        <div className="space-y-1">
+          {/* 1. Auto-Save Row */}
+          <div className="flex items-center justify-between py-3 border-b border-[#242428]">
             <div>
-              <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1.5">
-                Automatic Expiration (TTL)
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {TTL_OPTIONS.map((opt) => (
+              <div className="text-xs font-mono font-bold text-white uppercase tracking-wider">
+                Auto-Save
+              </div>
+              <div className="text-[11px] text-[#a1a1aa] font-sans">
+                Automatically saves changes as you type
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoSaveEnabled}
+                onChange={(e) => onAutoSaveEnabledChange(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-[#242428] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#d71921]"></div>
+            </label>
+          </div>
+
+          {/* 2. Auto-Delete Expiration */}
+          <div className="py-3 border-b border-[#242428]">
+            <div className="text-xs font-mono font-bold text-white uppercase tracking-wider mb-1">
+              Auto-Delete Pad
+            </div>
+            <div className="text-[11px] text-[#a1a1aa] font-sans mb-2.5">
+              Permanently removes pad after selected duration
+            </div>
+            <div className="flex flex-wrap gap-1.5 font-mono text-xs">
+              {TTL_OPTIONS.map((opt) => {
+                const isSelected = expiresInMinutes === opt.value;
+                return (
                   <button
                     key={opt.label}
                     type="button"
                     onClick={() => onExpiresChange(opt.value)}
-                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-medium transition ${
-                      expiresInMinutes === opt.value
-                        ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300'
-                        : 'border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
+                    className={`px-3 py-1.5 rounded-full border transition cursor-pointer text-xs ${
+                      isSelected
+                        ? 'bg-white text-black font-bold border-white'
+                        : 'bg-black text-[#a1a1aa] hover:text-white border-[#242428] hover:border-[#38383e]'
                     }`}
                   >
-                    <span>{opt.label}</span>
-                    {expiresInMinutes === opt.value && <Check className="w-3.5 h-3.5 text-emerald-500" />}
+                    {opt.label}
                   </button>
-                ))}
-              </div>
-              <p className="mt-1.5 text-[11px] text-neutral-400">
-                Pads exceeding their expiration are permanently destroyed on the database.
-              </p>
+                );
+              })}
             </div>
+          </div>
 
-            {/* Burn after read */}
-            <div className="p-4 rounded-xl border border-red-200 dark:border-red-950/60 bg-red-50/40 dark:bg-red-950/20 flex items-start gap-3">
-              <Flame className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-red-900 dark:text-red-300">
-                    Burn After Reading (Self-Destruct)
-                  </span>
+          {/* 3. Delete After Reading */}
+          <div className="flex items-center justify-between py-3 border-b border-[#242428]">
+            <div>
+              <div className="text-xs font-mono font-bold text-white uppercase tracking-wider">
+                Delete After Reading
+              </div>
+              <div className="text-[11px] text-[#a1a1aa] font-sans">
+                Pad self-destructs after first open
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={burnAfterRead}
+                onChange={(e) => onBurnAfterReadChange(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-[#242428] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#d71921]"></div>
+            </label>
+          </div>
+
+          {/* 4. Decoy Pad (Optional Collapsible) */}
+          {onDecoyPasswordChange && onDecoyNoteContentChange && (
+            <details className="py-2.5 text-xs font-mono group">
+              <summary className="flex items-center justify-between cursor-pointer text-[#a1a1aa] hover:text-white select-none py-1">
+                <span className="font-bold uppercase tracking-wider">Decoy Pad (Optional)</span>
+                <span className="text-[#71717a] group-open:rotate-90 transition-transform">▸</span>
+              </summary>
+              <div className="pt-3 space-y-3 font-sans">
+                <p className="text-[11px] text-[#71717a]">
+                  If someone demands your password, entering this decoy password will open the fake note below instead.
+                </p>
+                <div>
+                  <label className="block text-[11px] font-mono text-[#a1a1aa] mb-1">
+                    Decoy Password
+                  </label>
                   <input
-                    type="checkbox"
-                    checked={burnAfterRead}
-                    onChange={(e) => onBurnAfterReadChange(e.target.checked)}
-                    className="h-4 w-4 rounded border-neutral-300 text-red-600 focus:ring-red-500"
+                    type="password"
+                    value={decoyPassword || ''}
+                    onChange={(e) => onDecoyPasswordChange(e.target.value)}
+                    placeholder="Set alternate password..."
+                    className="w-full px-3 py-2 bg-black border border-[#242428] focus:border-white rounded-xl text-white text-xs font-mono outline-none"
                   />
                 </div>
-                <p className="mt-1 text-[11px] text-red-700 dark:text-red-400/80 leading-relaxed">
-                  The pad is immediately and irreversibly deleted from the server after the first successful decryption.
-                </p>
+                <div>
+                  <label className="block text-[11px] font-mono text-[#a1a1aa] mb-1">
+                    Decoy Content
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={decoyNoteContent || ''}
+                    onChange={(e) => onDecoyNoteContentChange(e.target.value)}
+                    placeholder="Decoy notes..."
+                    className="w-full px-3 py-2 bg-black border border-[#242428] focus:border-white rounded-xl text-white text-xs font-mono outline-none resize-none"
+                  />
+                </div>
               </div>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="p-3 bg-neutral-100 dark:bg-neutral-800/60 rounded-xl text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              <strong>Plausible Deniability:</strong> Configure an alternate decoy password. If forced to disclose your password, entering the decoy password decrypts the dummy note below while keeping your real notes hidden.
-            </div>
+            </details>
+          )}
+        </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1.5">
-                Decoy Password (Optional)
-              </label>
-              <div className="relative">
-                <input
-                  type="password"
-                  value={decoyPassword}
-                  onChange={(e) => onDecoyPasswordChange(e.target.value)}
-                  placeholder="Set decoy password..."
-                  className="w-full px-3.5 py-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 rounded-xl text-neutral-900 dark:text-neutral-100 text-xs focus:ring-2 focus:ring-emerald-500 font-mono"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1.5">
-                Decoy Content (Displayed when decoy password is entered)
-              </label>
-              <textarea
-                rows={4}
-                value={decoyNoteContent}
-                onChange={(e) => onDecoyNoteContentChange(e.target.value)}
-                placeholder="Grocery list: Milk, Bread, Coffee..."
-                className="w-full px-3.5 py-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 rounded-xl text-neutral-900 dark:text-neutral-100 text-xs focus:ring-2 focus:ring-emerald-500 font-mono resize-none"
-              />
-            </div>
-          </div>
-        )}
-
-        <div className="mt-6 flex justify-end">
+        {/* Footer */}
+        <div className="mt-5 pt-3 border-t border-[#242428] flex items-center justify-between">
+          <span className="text-[11px] font-mono text-[#71717a]">Settings save automatically</span>
           <button
             onClick={onClose}
-            className="px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition"
+            className="px-5 py-2 text-xs font-mono font-bold uppercase tracking-wider text-black bg-white hover:bg-[#d71921] hover:text-white rounded-full transition shadow-none cursor-pointer"
           >
             Done
           </button>

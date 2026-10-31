@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -9,8 +11,8 @@
   }
 
   .dark {
-    --background: 240 5% 7%;
-    --foreground: 0 0% 98%;
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
   }
 }
 
@@ -19,6 +21,23 @@ body {
   height: 100%;
   margin: 0;
   padding: 0;
+  background-color: #000000;
+  color: #ffffff;
+}
+
+/* Nothing OS dot matrix subtle background */
+.bg-nothing-dots {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* Red LED Diode Glowing Pulse */
+.led-diode-pulse {
+  box-shadow: 0 0 10px rgba(215, 25, 33, 0.85), 0 0 3px rgba(215, 25, 33, 1);
+}
+
+.led-diode-subtle {
+  box-shadow: 0 0 6px rgba(215, 25, 33, 0.45);
 }
 
 /* Custom scrollbars */
@@ -32,12 +51,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(150, 150, 150, 0.2);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(150, 150, 150, 0.4);
+  background: rgba(255, 255, 255, 0.25);
 }
 
 /* Hide scrollbar for tab list */
@@ -60,7 +79,7 @@ body {
 }
 
 .cm-scroller {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+  font-family: var(--font-jetbrains-mono), 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
   line-height: 1.6 !important;
 }
 

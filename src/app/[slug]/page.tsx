@@ -22,15 +22,16 @@ import {
   AlertTriangle,
   RefreshCw,
   Clock,
-  Sparkles,
 } from 'lucide-react';
+
+const MAX_PAD_CHARS = 500000;
 
 const DEFAULT_INITIAL_TABS: PadTab[] = [
   {
     id: 'tab-1',
-    title: 'notes.md',
-    language: 'markdown',
-    content: `# Welcome to your CodedPad 🔒\n\nThis note is zero-knowledge encrypted in your browser using **hardware-accelerated AES-GCM-256**.\n\n### Quick Features:\n- ✍️ **Code & Text:** Syntax highlighting for 50+ languages (Java, Python, JS/TS, C++, Go, Rust, etc.).\n- 👁️ **Live Split Markdown:** Toggle the columns icon on the top bar.\n- 🔐 **Plausible Deniability:** Configure an alternate decoy password under Settings.\n- 🔥 **Burn-After-Reading & TTL:** Auto-destruct notes after reading.\n- 🔄 **Real-Time Sync:** Instant multi-device synchronization active.\n- 💾 **Smart Auto-Save:** Auto-saves on idle pause (2.5s) or every 30 seconds.\n- ⌨️ **Keyboard Shortcut:** Press \`Ctrl+S\` (or \`Cmd+S\`) to encrypt and save.\n`,
+    title: 'note.txt',
+    language: 'text',
+    content: '',
   },
 ];
 
@@ -265,7 +266,7 @@ export default function PadPage() {
         setRemoteUpdateAvailable(null);
         setHasUnsavedChanges(false);
 
-        setStatusMessage('🔄 Real-time sync: updated from another session.');
+        setStatusMessage('Real-time sync completed');
         setTimeout(() => setStatusMessage(null), 4000);
       }
     } catch (err) {
@@ -368,7 +369,15 @@ export default function PadPage() {
         };
       }
 
-      // 1. Client-Side Hardware Encryption
+      // Check text limit (500,000 characters)
+      const totalChars = current.tabs.reduce((acc, tab) => acc + (tab.content?.length || 0), 0);
+      if (totalChars > MAX_PAD_CHARS) {
+        setStatusMessage('Pad limit reached (500,000 characters maximum)');
+        setTimeout(() => setStatusMessage(null), 4000);
+        return;
+      }
+
+      // 1. Client-Side Encryption
       const encryptedPackage = await encryptPad({
         data: {
           tabs: current.tabs,
@@ -380,7 +389,7 @@ export default function PadPage() {
         slug: current.slug,
       });
 
-      // 2. Compute Zero-Knowledge Authorization Proof
+      // 2. Compute Authorization Proof
       const authProof = await computeAuthProof(current.password, current.slug);
 
       // 3. Transmit to server
@@ -415,7 +424,7 @@ export default function PadPage() {
       setLastSavedTime(timeStr);
 
       if (!isSilent) {
-        setStatusMessage('✓ Encrypted and saved.');
+        setStatusMessage('Saved');
         setTimeout(() => setStatusMessage(null), 3000);
       }
     } catch (err: any) {
@@ -517,6 +526,17 @@ export default function PadPage() {
     setShowUnlockModal(true);
   };
 
+  // Logout and Exit
+  const handleLogout = () => {
+    setPassword('');
+    setIsUnlocked(false);
+    try {
+      sessionStorage.removeItem(`codedpad_pwd_${slug}`);
+      sessionStorage.removeItem(`codedpad_burn_${slug}`);
+    } catch {}
+    router.push('/');
+  };
+
   // Keyboard Shortcuts: Ctrl+S / Cmd+S to save, Ctrl+L to lock
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -579,7 +599,7 @@ export default function PadPage() {
 
   return (
     <div
-      className={`h-screen flex flex-col overflow-hidden font-sans transition-colors ${
+      className={`h-[100dvh] min-h-[100dvh] w-full flex flex-col overflow-hidden font-sans transition-colors ${
         isDark ? 'dark bg-[#121214] text-[#f8fafc]' : 'bg-neutral-50 text-[#0f172a]'
       }`}
     >
@@ -597,6 +617,7 @@ export default function PadPage() {
         hasUnsavedChanges={hasUnsavedChanges}
         onSave={() => handleSave(false)}
         onLock={handleLock}
+        onLogout={handleLogout}
         onOpenSettings={() => setShowSettingsModal(true)}
         onOpenShare={() => setShowShareModal(true)}
         onOpenPasswordModal={() => setShowPasswordSetupModal(true)}
@@ -605,6 +626,7 @@ export default function PadPage() {
         isDark={isDark}
         onToggleTheme={handleToggleTheme}
         isDecoyActive={isDecoyActive}
+        hasPassword={Boolean(password)}
         saving={saving}
         lastSavedTime={lastSavedTime}
         autoSaveEnabled={autoSaveEnabled}
@@ -634,43 +656,60 @@ export default function PadPage() {
         </div>
       )}
 
+      {/* Unsaved changes without password reminder banner */}
+      {!password && isUnlocked && !loading && hasUnsavedChanges && (
+        <div className="bg-[#18181b] border-b border-amber-500/30 px-4 py-2 flex items-center justify-between text-xs font-mono text-amber-300 z-20 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <span>
+              You haven&apos;t set a password yet — auto-save is paused until a password is set.
+            </span>
+          </div>
+          <button
+            onClick={() => setShowPasswordSetupModal(true)}
+            className="px-3.5 py-1 bg-white hover:bg-amber-400 text-black font-bold rounded-full text-xs transition uppercase tracking-wider cursor-pointer"
+          >
+            Set Password
+          </button>
+        </div>
+      )}
+
       {/* Main Workspace Area */}
       <div className="flex-1 flex overflow-hidden relative">
         {loading ? (
-          <div className="flex-1 flex items-center justify-center">
+          <div className="flex-1 flex items-center justify-center bg-[#0e0e10]">
             <div className="flex flex-col items-center gap-3">
-              <div className="w-8 h-8 border-3 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
-              <span className="text-xs font-mono text-neutral-500">Connecting zero-knowledge vault...</span>
+              <div className="w-8 h-8 border-2 border-white/20 border-t-[#d71921] rounded-full animate-spin" />
+              <span className="text-xs font-mono text-[#a1a1aa]">Loading pad...</span>
             </div>
           </div>
         ) : !isUnlocked ? (
           /* Locked Pad Overlay Screen */
-          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 flex items-center justify-center text-emerald-500 mb-4 shadow-lg">
-              <Lock className="w-8 h-8" />
+          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center bg-[#0e0e10]">
+            <div className="w-14 h-14 rounded-2xl bg-[#18181b] border border-[#242428] flex items-center justify-center text-[#d71921] mb-4 shadow-xl">
+              <Lock className="w-6 h-6" />
             </div>
-            <h1 className="text-xl font-bold text-neutral-900 dark:text-white">This CodedPad is Encrypted</h1>
-            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 max-w-sm">
-              The contents of <span className="font-mono text-emerald-500 font-semibold">{slug}</span> are locked with
-              AES-GCM-256. Enter the passphrase to decrypt in your browser.
+            <h1 className="text-xl font-headline font-bold text-white">This Pad is Locked</h1>
+            <p className="mt-1.5 text-xs text-[#a1a1aa] max-w-sm font-sans">
+              The notes for <span className="font-mono font-bold text-white px-2 py-0.5 bg-[#18181b] rounded border border-[#242428]">{slug}</span> are password protected.
             </p>
             <button
               onClick={() => setShowUnlockModal(true)}
-              className="mt-6 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md transition flex items-center gap-2"
+              className="mt-6 px-6 py-2.5 bg-white hover:bg-[#d71921] text-black hover:text-white rounded-full text-xs font-mono font-bold tracking-wider transition flex items-center gap-2 shadow-lg"
             >
               <Lock className="w-4 h-4" />
-              <span>Unlock Pad</span>
+              <span>Enter Password to Unlock</span>
             </button>
           </div>
         ) : (
           /* Unlocked Workspace: Editor and Split Preview */
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0 min-w-0">
             {/* CodeMirror Editor Pane */}
             <div
-              className={`h-full flex flex-col ${
+              className={`flex flex-col min-w-0 min-h-0 ${
                 isSplitView && activeTab?.language === 'markdown'
-                  ? 'w-1/2 border-r border-neutral-200 dark:border-neutral-800'
-                  : 'w-full'
+                  ? 'h-1/2 md:h-full md:w-1/2 border-b md:border-b-0 md:border-r border-[#242428]'
+                  : 'h-full w-full'
               }`}
             >
               <CodeEditor
@@ -684,7 +723,7 @@ export default function PadPage() {
 
             {/* Live Markdown Split Preview */}
             {isSplitView && activeTab?.language === 'markdown' && (
-              <div className="w-1/2 h-full overflow-hidden">
+              <div className="h-1/2 md:h-full md:w-1/2 overflow-hidden min-w-0 min-h-0">
                 <MarkdownPreview content={activeTab?.content || ''} isDark={isDark} />
               </div>
             )}
@@ -693,45 +732,49 @@ export default function PadPage() {
       </div>
 
       {/* Status Bar Footer */}
-      <footer className="h-7 border-t border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-4 flex items-center justify-between text-[11px] font-mono text-neutral-500 select-none shrink-0">
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            AES-GCM-256 (ZK)
+      <footer className="h-7 border-t border-[#242428] bg-black px-3 sm:px-4 flex items-center justify-between text-[11px] font-mono text-[#71717a] select-none shrink-0 overflow-hidden">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 truncate">
+          <span className="flex items-center gap-1.5 text-white font-medium shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#d71921]" />
+            Protected
           </span>
 
-          <span className="text-neutral-300 dark:text-neutral-700">|</span>
+          <span className="text-[#38383e] hidden xs:inline">|</span>
 
-          <span className="flex items-center gap-1 text-neutral-400">
-            <RefreshCw className="w-3 h-3 text-emerald-500" />
-            Live Sync: Active
-          </span>
-
-          <span className="text-neutral-300 dark:text-neutral-700">|</span>
-
-          <span className="flex items-center gap-1 text-neutral-400">
-            <Clock className="w-3 h-3 text-emerald-500" />
-            {autoSaveEnabled ? (
-              <span>Auto-save: ON ({autoSaveMode === 'smart' ? '2.5s idle / 30s max' : '30s'})</span>
-            ) : (
-              <span className="text-neutral-400">Auto-save: OFF</span>
-            )}
-          </span>
+          {/* Auto-save status with clear password requirement note */}
+          {!password ? (
+            <button
+              onClick={() => setShowPasswordSetupModal(true)}
+              className="flex items-center gap-1 text-amber-400 hover:text-amber-300 font-medium transition cursor-pointer truncate"
+              title="Click to set password and enable auto-save"
+            >
+              <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+              <span className="truncate">Auto-save paused</span>
+            </button>
+          ) : (
+            <span className="flex items-center gap-1 text-[#a1a1aa] shrink-0">
+              <Clock className="w-3 h-3 text-[#d71921]" />
+              <span className="hidden sm:inline">Auto-save: {autoSaveEnabled ? 'ON' : 'OFF'}</span>
+              <span className="sm:hidden">Auto: {autoSaveEnabled ? 'ON' : 'OFF'}</span>
+            </span>
+          )}
 
           {statusMessage && (
-            <span className="text-emerald-500 dark:text-emerald-400 font-sans font-semibold animate-pulse ml-2">
+            <span className="text-white font-mono font-medium animate-pulse ml-2 px-1.5 py-0.5 bg-[#d71921] rounded text-[10px] shrink-0">
               {statusMessage}
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-4">
-          <span>
+        <div className="flex items-center gap-2 sm:gap-4 text-[#a1a1aa] shrink-0 text-[10px] sm:text-[11px]">
+          <span className="hidden md:inline">
             Ln {cursorPos.line}, Col {cursorPos.col}
           </span>
-          <span>{lineCount} lines</span>
-          <span>{wordCount} words</span>
-          <span>{charCount} chars</span>
+          <span className="hidden sm:inline">{lineCount} lines</span>
+          <span className="hidden lg:inline">{wordCount} words</span>
+          <span className={charCount > 450000 ? 'text-[#d71921] font-bold' : ''}>
+            {charCount > 9999 ? `${(charCount / 1000).toFixed(0)}k` : charCount.toLocaleString()} / 500k
+          </span>
           <span className="hidden sm:inline">UTF-8</span>
         </div>
       </footer>
@@ -740,10 +783,12 @@ export default function PadPage() {
       <PasswordModal
         isOpen={showUnlockModal}
         onSubmit={handleUnlock}
-        title="Unlock CodedPad"
-        description={`Enter the passphrase to decrypt /${slug} locally in your browser.`}
-        submitButtonText="Decrypt & Open"
+        title="Unlock Pad"
+        description={`Enter password to view notes for ${slug}.`}
+        submitButtonText="Unlock Pad"
         isInitialSetup={false}
+        slug={slug}
+        onSuggestAlternative={(newSlug) => router.push(`/${newSlug}`)}
       />
 
       {/* Set Master Password for New Pad or Change Modal */}
@@ -751,10 +796,11 @@ export default function PadPage() {
         isOpen={showPasswordSetupModal}
         onClose={() => setShowPasswordSetupModal(false)}
         onSubmit={handlePasswordSet}
-        title={password ? 'Change Pad Passphrase' : 'Set Master Passphrase'}
-        description="Your passphrase derives the 256-bit AES encryption key. It is never transmitted to the server."
-        submitButtonText="Save Passphrase & Encrypt"
+        title={password ? 'Change Password' : 'Protect Your Pad'}
+        description="Please choose a password to protect your pad so only you can access it."
+        submitButtonText="Save & Protect"
         isInitialSetup={true}
+        slug={slug}
       />
 
       {/* Settings Modal (TTL, Burn-after-read, Decoy Password, Auto-Save) */}

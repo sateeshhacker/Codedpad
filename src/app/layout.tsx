@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'CodedPad | Zero-Knowledge Encrypted Code & Text Notepad',
+  title: 'CodedPad | Private Notes & Code Scratchpad',
   description:
-    'Client-side encrypted notepad and code editor with AES-GCM-256, CodeMirror syntax highlighting, multi-tabs, and plausible deniability.',
+    'Private scratchpad for notes and code with automatic saving and password protection.',
 };
 
 export default function RootLayout({
@@ -14,7 +14,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body className="antialiased bg-neutral-50 dark:bg-[#121214] text-neutral-900 dark:text-neutral-100 min-h-screen">
+      <body className="antialiased bg-black text-white min-h-screen selection:bg-[#d71921] selection:text-white font-sans">
         {children}
       </body>
     </html>

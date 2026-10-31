@@ -12,9 +12,9 @@ interface MarkdownPreviewProps {
 export default function MarkdownPreview({ content, isDark }: MarkdownPreviewProps) {
   return (
     <div
-      className={`h-full overflow-y-auto px-8 py-6 prose max-w-none transition-colors ${
+      className={`h-full overflow-y-auto px-4 sm:px-6 md:px-8 py-4 sm:py-6 prose max-w-none transition-colors ${
         isDark
-          ? 'prose-invert bg-[#1e1e24] text-neutral-200 prose-pre:bg-neutral-900 prose-pre:border prose-pre:border-neutral-800'
+          ? 'prose-invert bg-[#141416] text-neutral-200 prose-pre:bg-[#0e0e10] prose-pre:border prose-pre:border-[#242428]'
           : 'bg-white text-neutral-800 prose-pre:bg-neutral-50 prose-pre:border prose-pre:border-neutral-200'
       }`}
     >
@@ -23,24 +23,24 @@ export default function MarkdownPreview({ content, isDark }: MarkdownPreviewProp
         components={{
           table: ({ node, ...props }) => (
             <div className="overflow-x-auto my-4">
-              <table className="min-w-full divide-y divide-neutral-300 dark:divide-neutral-700 border" {...props} />
+              <table className="min-w-full divide-y divide-[#242428] border border-[#242428]" {...props} />
             </div>
           ),
           th: ({ node, ...props }) => (
-            <th className="px-3 py-2 bg-neutral-100 dark:bg-neutral-800 text-left font-semibold" {...props} />
+            <th className="px-3 py-2 bg-[#18181b] text-left font-semibold text-white" {...props} />
           ),
           td: ({ node, ...props }) => (
-            <td className="px-3 py-2 border-t border-neutral-200 dark:border-neutral-800" {...props} />
+            <td className="px-3 py-2 border-t border-[#242428]" {...props} />
           ),
           a: ({ node, ...props }) => (
-            <a className="text-emerald-500 hover:text-emerald-600 underline font-medium" target="_blank" rel="noopener noreferrer" {...props} />
+            <a className="text-[#d71921] hover:underline font-medium" target="_blank" rel="noopener noreferrer" {...props} />
           ),
           code: ({ node, className, children, ...props }) => {
             const match = /language-(\w+)/.exec(className || '');
             return (
               <code
-                className={`rounded px-1.5 py-0.5 font-mono text-[13px] ${
-                  isDark ? 'bg-neutral-800 text-emerald-400' : 'bg-neutral-100 text-emerald-700'
+                className={`rounded px-1.5 py-0.5 font-mono text-[12.5px] ${
+                  isDark ? 'bg-[#18181b] text-white border border-[#242428]' : 'bg-neutral-100 text-neutral-800'
                 }`}
                 {...props}
               >

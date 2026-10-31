@@ -25,6 +25,7 @@ interface CodeEditorProps {
 }
 
 export const SUPPORTED_LANGUAGES = [
+  { id: 'text', name: 'Plain Text' },
   { id: 'markdown', name: 'Markdown' },
   { id: 'java', name: 'Java' },
   { id: 'javascript', name: 'JavaScript' },
@@ -37,7 +38,6 @@ export const SUPPORTED_LANGUAGES = [
   { id: 'html', name: 'HTML' },
   { id: 'css', name: 'CSS' },
   { id: 'sql', name: 'SQL' },
-  { id: 'text', name: 'Plain Text' },
 ];
 
 export default function CodeEditor({
@@ -101,11 +101,11 @@ export default function CodeEditor({
               color: '#f8fafc !important',
             },
             '.cm-content': {
-              caretColor: '#22c55e !important',
+              caretColor: '#ffffff !important',
               color: '#f8fafc !important',
             },
             '.cm-cursor, .cm-dropCursor': {
-              borderLeftColor: '#22c55e !important',
+              borderLeftColor: '#d71921 !important',
               borderLeftWidth: '2px !important',
             },
             '.cm-gutters': {
@@ -118,10 +118,10 @@ export default function CodeEditor({
             },
             '.cm-activeLineGutter': {
               backgroundColor: '#1f1f24 !important',
-              color: '#22c55e !important',
+              color: '#ffffff !important',
             },
             '.cm-selectionBackground, ::selection': {
-              backgroundColor: 'rgba(34, 197, 94, 0.25) !important',
+              backgroundColor: 'rgba(215, 25, 33, 0.3) !important',
             },
           }
         : {
@@ -130,11 +130,11 @@ export default function CodeEditor({
               color: '#0f172a !important',
             },
             '.cm-content': {
-              caretColor: '#16a34a !important',
+              caretColor: '#0f172a !important',
               color: '#0f172a !important',
             },
             '.cm-cursor, .cm-dropCursor': {
-              borderLeftColor: '#16a34a !important',
+              borderLeftColor: '#d71921 !important',
               borderLeftWidth: '2px !important',
             },
             '.cm-gutters': {
@@ -147,16 +147,17 @@ export default function CodeEditor({
             },
             '.cm-activeLineGutter': {
               backgroundColor: '#f1f5f9 !important',
-              color: '#16a34a !important',
+              color: '#d71921 !important',
             },
             '.cm-selectionBackground, ::selection': {
-              backgroundColor: 'rgba(22, 163, 74, 0.2) !important',
+              backgroundColor: 'rgba(215, 25, 33, 0.15) !important',
             },
           },
       { dark: isDark }
     );
 
     list.push(contrastTheme);
+    list.push(EditorView.lineWrapping);
     if (isDark) {
       list.push(oneDark);
     }

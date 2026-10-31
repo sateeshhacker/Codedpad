@@ -27,7 +27,7 @@ export default function ShareModal({
 
   useEffect(() => {
     if (isOpen && fullUrl) {
-      QRCode.toDataURL(fullUrl, { width: 220, margin: 1 })
+      QRCode.toDataURL(fullUrl, { width: 220, margin: 1, color: { dark: '#000000', light: '#ffffff' } })
         .then((url) => setQrCodeUrl(url))
         .catch((err) => console.error('QR code generation failed:', err));
     }
@@ -64,50 +64,54 @@ export default function ShareModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-md bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl shadow-2xl p-6 relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in font-sans">
+      <div className="w-full max-w-md bg-[#0e0e10] border border-[#242428] rounded-3xl shadow-2xl p-5 sm:p-7 relative max-h-[90dvh] overflow-y-auto">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-1.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+          className="absolute top-5 right-5 p-1.5 text-[#71717a] hover:text-white rounded-full hover:bg-[#18181b] border border-[#242428] transition"
         >
-          <X className="w-4 h-4" />
+          <X className="w-3.5 h-3.5" />
         </button>
 
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-            <Share2 className="w-5 h-5" />
+          <div className="w-10 h-10 rounded-full bg-[#18181b] border border-[#242428] text-[#d71921] flex items-center justify-center shrink-0">
+            <Share2 className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-neutral-900 dark:text-white">Share & Export</h2>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              Open on phone via QR or save an offline encrypted backup
+            <h2 className="text-base sm:text-lg font-headline font-bold text-white uppercase tracking-tight">
+              Share &amp; Export
+            </h2>
+            <p className="text-xs text-[#a1a1aa] font-mono leading-relaxed">
+              Open instantly on mobile via QR or export an encrypted backup
             </p>
           </div>
         </div>
 
         {/* QR Code Container */}
-        <div className="flex flex-col items-center justify-center my-4 p-4 bg-neutral-50 dark:bg-neutral-800/50 rounded-2xl border border-neutral-200 dark:border-neutral-800">
+        <div className="flex flex-col items-center justify-center my-4 p-5 bg-black rounded-2xl border border-[#242428]">
           {qrCodeUrl ? (
-            <img src={qrCodeUrl} alt="Pad QR Code" className="w-44 h-44 rounded-xl shadow-sm bg-white p-2" />
+            <img src={qrCodeUrl} alt="Pad QR Code" className="w-44 h-44 rounded-xl bg-white p-2 shadow-sm" />
           ) : (
-            <div className="w-44 h-44 flex items-center justify-center text-xs text-neutral-400">
+            <div className="w-44 h-44 flex items-center justify-center text-xs font-mono text-[#71717a]">
               Generating QR...
             </div>
           )}
-          <span className="text-[11px] text-neutral-400 mt-2">Scan with camera to open on mobile</span>
+          <span className="text-[11px] font-mono text-[#71717a] mt-2.5">
+            Scan with phone camera to open on mobile
+          </span>
         </div>
 
         {/* URL Input */}
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-4 bg-black border border-[#242428] rounded-2xl p-1.5 focus-within:border-white transition-colors">
           <input
             type="text"
             readOnly
             value={fullUrl}
-            className="flex-1 px-3 py-2 text-xs bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl font-mono text-neutral-700 dark:text-neutral-300 select-all"
+            className="flex-1 px-3 py-1.5 text-xs bg-transparent border-none font-mono text-[#e4e4e7] outline-none select-all"
           />
           <button
             onClick={handleCopyLink}
-            className="px-3.5 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl flex items-center gap-1.5 transition shrink-0"
+            className="px-4 py-2 text-xs font-mono font-bold uppercase tracking-wider bg-white hover:bg-[#d71921] text-black hover:text-white rounded-full flex items-center gap-1.5 transition shrink-0 shadow-none"
           >
             {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
             <span>{copied ? 'Copied' : 'Copy'}</span>
@@ -115,28 +119,28 @@ export default function ShareModal({
         </div>
 
         {/* Exports */}
-        <div className="space-y-2 pt-2 border-t border-neutral-100 dark:border-neutral-800">
+        <div className="space-y-2 pt-2 border-t border-[#242428] font-mono">
           <button
             onClick={handleDownloadPlaintext}
-            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-xs font-medium text-neutral-700 dark:text-neutral-300 transition"
+            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-[#242428] hover:border-[#38383e] hover:bg-[#131315] text-xs text-[#e4e4e7] transition"
           >
             <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4 text-emerald-500" />
-              <span>Download Decrypted Markdown (`.md`)</span>
+              <FileText className="w-4 h-4 text-[#d71921]" />
+              <span>Download Text File (.md)</span>
             </div>
-            <Download className="w-3.5 h-3.5 text-neutral-400" />
+            <Download className="w-3.5 h-3.5 text-[#71717a]" />
           </button>
 
           {rawEncryptedJson && (
             <button
               onClick={handleDownloadEncrypted}
-              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-xs font-medium text-neutral-700 dark:text-neutral-300 transition"
+              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-[#242428] hover:border-[#38383e] hover:bg-[#131315] text-xs text-[#e4e4e7] transition"
             >
               <div className="flex items-center gap-2">
-                <Lock className="w-4 h-4 text-amber-500" />
-                <span>Export Encrypted Backup (`.codedpad.json`)</span>
+                <Lock className="w-4 h-4 text-[#d71921]" />
+                <span>Download Backup File (.json)</span>
               </div>
-              <Download className="w-3.5 h-3.5 text-neutral-400" />
+              <Download className="w-3.5 h-3.5 text-[#71717a]" />
             </button>
           )}
         </div>
