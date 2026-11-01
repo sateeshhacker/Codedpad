@@ -97,3 +97,35 @@ body {
 .animate-fade-in {
   animation: fadeIn 0.15s ease-out forwards;
 }
+
+/* Universal high-contrast selection */
+::selection {
+  background-color: rgba(215, 25, 33, 0.55) !important;
+  color: #ffffff !important;
+}
+::-moz-selection {
+  background-color: rgba(215, 25, 33, 0.55) !important;
+  color: #ffffff !important;
+}
+
+/* CodeMirror selection layer and selection background */
+.cm-editor .cm-selectionBackground,
+.cm-editor .cm-selectionLayer .cm-selectionBackground,
+.cm-editor.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground,
+.cm-editor.cm-focused .cm-selectionBackground,
+.cm-editor .cm-content ::selection,
+.cm-editor .cm-line ::selection,
+.cm-editor .cm-line span::selection {
+  background-color: rgba(215, 25, 33, 0.55) !important;
+}
+
+html:not(.dark) .cm-editor .cm-selectionBackground,
+html:not(.dark) .cm-editor .cm-selectionLayer .cm-selectionBackground,
+html:not(.dark) .cm-editor.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground,
+html:not(.dark) .cm-editor.cm-focused .cm-selectionBackground,
+html:not(.dark) .cm-editor .cm-content ::selection,
+html:not(.dark) .cm-editor .cm-line ::selection,
+html:not(.dark) .cm-editor .cm-line span::selection {
+  background-color: rgba(215, 25, 33, 0.35) !important;
+}
+

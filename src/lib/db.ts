@@ -27,8 +27,8 @@ function getClient(): Client {
     return globalForDb.dbClient;
   }
 
-  const url = process.env.TURSO_DATABASE_URL || 'file:data/codedpad.db';
-  const authToken = process.env.TURSO_AUTH_TOKEN;
+  const url = process.env.TURSO_DATABASE_URL || process.env.TURSO_URL || process.env.STORAGE_URL || 'file:data/codedpad.db';
+  const authToken = process.env.TURSO_AUTH_TOKEN || process.env.STORAGE_AUTH_TOKEN || process.env.TURSO_TOKEN;
 
   // If local file path, ensure directory exists
   if (url.startsWith('file:') && typeof process !== 'undefined') {

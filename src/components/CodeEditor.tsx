@@ -114,14 +114,18 @@ export default function CodeEditor({
               borderRight: '1px solid #27272a !important',
             },
             '.cm-activeLine': {
-              backgroundColor: '#1f1f24 !important',
+              backgroundColor: '#1b1b1f !important',
             },
             '.cm-activeLineGutter': {
-              backgroundColor: '#1f1f24 !important',
+              backgroundColor: '#1b1b1f !important',
               color: '#ffffff !important',
             },
-            '.cm-selectionBackground, ::selection': {
-              backgroundColor: 'rgba(215, 25, 33, 0.3) !important',
+            '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection, .cm-line ::selection, .cm-line span::selection, ::selection': {
+              backgroundColor: 'rgba(215, 25, 33, 0.55) !important',
+            },
+            '.cm-selectionMatch': {
+              backgroundColor: 'rgba(255, 255, 255, 0.12) !important',
+              outline: '1px solid rgba(255, 255, 255, 0.25) !important',
             },
           }
         : {
@@ -149,18 +153,22 @@ export default function CodeEditor({
               backgroundColor: '#f1f5f9 !important',
               color: '#d71921 !important',
             },
-            '.cm-selectionBackground, ::selection': {
-              backgroundColor: 'rgba(215, 25, 33, 0.15) !important',
+            '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection, .cm-line ::selection, .cm-line span::selection, ::selection': {
+              backgroundColor: 'rgba(215, 25, 33, 0.3) !important',
+            },
+            '.cm-selectionMatch': {
+              backgroundColor: 'rgba(0, 0, 0, 0.08) !important',
+              outline: '1px solid rgba(0, 0, 0, 0.2) !important',
             },
           },
       { dark: isDark }
     );
 
-    list.push(contrastTheme);
-    list.push(EditorView.lineWrapping);
     if (isDark) {
       list.push(oneDark);
     }
+    list.push(contrastTheme);
+    list.push(EditorView.lineWrapping);
 
     return list;
   }, [language, isDark]);
